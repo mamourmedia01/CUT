@@ -514,13 +514,17 @@
     try {
       const t = await Store.createHealthToken();
       watchLink = Store.healthLink(t);
-      $('wLink').textContent = watchLink; $('wOut').hidden = false; $('wGuide').open = true;
+      $('wLink').textContent = watchLink; $('wHead').textContent = Store.healthHeader(); $('wOut').hidden = false; $('wGuide').open = true;
       toast('Link created. Copy it now.');
     } catch (e) { toast('Couldn’t create the link. Check you’re signed in and online.'); }
   });
   $('wCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(watchLink); toast('Link copied'); }
     catch (e) { const r = document.createRange(); r.selectNodeContents($('wLink')); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Selected. Copy it from the menu.'); }
+  });
+  $('wCopyHead').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(Store.healthHeader()); toast('Header copied'); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($('wHead')); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Selected. Copy it from the menu.'); }
   });
   function watchLast() {
     let best = null;

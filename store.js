@@ -241,6 +241,7 @@
       if (bad.length) { bad.forEach(id => state.outbox.add(id)); await saveOutbox(); await Store.sync(); }
       return { local: mine.length, cloud: Object.keys(cloud).filter(id => norm(cloud[id]) !== '[]').length, fixed: bad.length, pending: Store.pending };
     },
+    healthHeader() { return 'Bearer ' + ((window.CUT_CONFIG || {}).SUPABASE_ANON_KEY || ''); },
     healthLink(token) { const c = window.CUT_CONFIG || {}; return c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/cut?action=health&k=' + encodeURIComponent(token); },
     // Reminders: the push key lives in the database; the Edge Function creates it the first time.
     _fn(action, body) {
