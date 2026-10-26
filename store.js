@@ -1,0 +1,207 @@
+// Cut Log storage: IndexedDB on the device (offline-first) + optional Supabase sync.
+(function () {
+  const DB_NAME = 'cutlog', DB_VER = 1;
+  let idb = null, sb = null, user = null;
+  const listeners = new Set();
+  const state = { days: {}, plan: null, outbox: new Set(), planDirty: false, lastPull: null, status: 'local' };
+
+  // ---------- IndexedDB helpers ----------
+  function openDB() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open(DB_NAME, DB_VER);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains('days')) d.createObjectStore('days');
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
+        if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos');
+      };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  function tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = idb.transaction(store, mode), s = t.objectStore(store);
+      let out; try { out = fn(s); } catch (e) { rej(e); return; }
+      t.oncomplete = () => res(out && 'result' in out ? out.result : out);
+      t.onerror = () => rej(t.error);
+    });
+  }
+  const put = (store, key, val) => tx(store, 'readwrite', s => s.put(val, key));
+  const del = (store, key) => tx(store, 'readwrite', s => s.delete(key));
+  const get = (store, key) => tx(store, 'readonly', s => s.get(key));
+  function getAll(store) {
+    return new Promise((res, rej) => {
+      const out = {}, t = idb.transaction(store, 'readonly'), c = t.objectStore(store).openCursor();
+      c.onsuccess = () => { const cur = c.result; if (cur) { out[cur.key] = cur.value; cur.continue(); } };
+      t.oncomplete = () => res(out); t.onerror = () => rej(t.error);
+    });
+  }
+
+  function setStatus(s) { if (state.status !== s) { state.status = s; emit('status'); } }
+  function emit(kind) { listeners.forEach(fn => { try { fn(kind); } catch (e) { console.error(e); } }); }
+  async function saveOutbox() { await put('meta', 'outbox', { days: [...state.outbox], plan: state.planDirty }); }
+
+  // ---------- public API ----------
+  const Store = {
+    get days() { return state.days; },
+    get plan() { return state.plan; },
+    get status() { return state.status; },
+    get user() { return user; },
+    get connected() { return !!sb; },
+    on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+
+    async init(defaultPlan) {
+      idb = await openDB();
+      state.days = await getAll('days');
+      state.plan = Object.assign({}, defaultPlan, (await get('meta', 'plan')) || {});
+      const ob = await get('meta', 'outbox'); if (ob) { state.outbox = new Set(ob.days || []); state.planDirty = !!ob.plan; }
+      state.lastPull = (await get('meta', 'lastPull')) || null;
+      const cfg = window.CUT_CONFIG || {};
+      if (cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase) {
+        sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+        const { data } = await sb.auth.getSession();
+        user = data.session ? data.session.user : null;
+        sb.auth.onAuthStateChange((_e, session) => { const was = user && user.id; user = session ? session.user : null; emit('auth'); if (user && user.id !== was) Store.sync(); });
+        setStatus(user ? (navigator.onLine ? 'syncing' : 'offline') : 'signedout');
+        if (user) Store.sync();
+      }
+      window.addEventListener('online', () => Store.sync());
+      window.addEventListener('offline', () => { if (user) setStatus('offline'); });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Store.sync(); });
+      setInterval(() => { if (document.visibilityState === 'visible') Store.sync(); }, 60000);
+    },
+
+    async saveDay(id, rec) {
+      const health = state.days[id] && state.days[id].health;
+      const clean = rec ? Object.assign({}, rec) : {};
+      delete clean.health;
+      const empty = !Object.values(clean).some(v => v !== null && v !== false && v !== undefined && v !== '');
+      if (empty && !health) { delete state.days[id]; await del('days', id); }
+      else { state.days[id] = Object.assign(empty ? {} : clean, health ? { health } : {}); await put('days', id, state.days[id]); }
+      if (sb) { state.outbox.add(id); await saveOutbox(); Store.syncSoon(); }
+    },
+
+    async savePlan(plan) {
+      state.plan = Object.assign({}, plan); await put('meta', 'plan', state.plan);
+      if (sb) { state.planDirty = true; await saveOutbox(); Store.syncSoon(); }
+    },
+
+    async replaceAll(plan, days) {
+      for (const id of Object.keys(state.days)) await del('days', id);
+      state.days = {};
+      for (const [id, rec] of Object.entries(days || {})) { state.days[id] = rec; await put('days', id, rec); if (sb) state.outbox.add(id); }
+      if (plan) { state.plan = Object.assign({}, state.plan, plan); await put('meta', 'plan', state.plan); if (sb) state.planDirty = true; }
+      if (sb) { await saveOutbox(); Store.syncSoon(); }
+    },
+
+    _t: null,
+    syncSoon() { clearTimeout(Store._t); Store._t = setTimeout(() => Store.sync(), 1200); },
+
+    _running: null,
+    async sync() {
+      if (!sb || !user) return;
+      if (!navigator.onLine) { setStatus('offline'); return; }
+      if (Store._running) return Store._running;
+      Store._running = (async () => {
+        setStatus('syncing');
+        try {
+          // push days
+          const ids = [...state.outbox];
+          if (ids.length) {
+            const rows = ids.map(id => { const r = Object.assign({}, state.days[id] || {}); delete r.health; return { user_id: user.id, day: id, data: r, updated_at: new Date().toISOString() }; });
+            const { error } = await sb.from('days').upsert(rows, { onConflict: 'user_id,day' });
+            if (error) throw error;
+            ids.forEach(id => state.outbox.delete(id));
+          }
+          if (state.planDirty) {
+            const { error } = await sb.from('settings').upsert({ user_id: user.id, data: state.plan, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+            if (error) throw error;
+            state.planDirty = false;
+          }
+          await saveOutbox();
+          // pull days
+          let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).limit(1000);
+          if (state.lastPull) q = q.gt('updated_at', state.lastPull);
+          const { data: rows, error: e2 } = await q;
+          if (e2) throw e2;
+          let changed = false;
+          for (const row of rows || []) {
+            const id = row.day;
+            const local = state.days[id] || {};
+            const base = state.outbox.has(id) ? Object.assign({}, local) : Object.assign({}, row.data || {});
+            delete base.health;
+            const rec = Object.assign(base, row.health ? { health: row.health } : {});
+            state.days[id] = rec; await put('days', id, rec); changed = true;
+            if (!state.lastPull || row.updated_at > state.lastPull) state.lastPull = row.updated_at;
+          }
+          await put('meta', 'lastPull', state.lastPull);
+          // pull settings
+          if (!state.planDirty) {
+            const { data: srow } = await sb.from('settings').select('data').eq('user_id', user.id).maybeSingle();
+            if (srow && srow.data && JSON.stringify(srow.data) !== JSON.stringify(state.plan)) { state.plan = Object.assign({}, state.plan, srow.data); await put('meta', 'plan', state.plan); changed = true; }
+          }
+          setStatus('synced');
+          if (changed) emit('data');
+        } catch (err) {
+          console.error('sync failed', err);
+          setStatus(navigator.onLine ? 'error' : 'offline');
+        } finally { Store._running = null; }
+      })();
+      return Store._running;
+    },
+
+    // ---------- account ----------
+    async signIn(email, password) { if (!sb) throw new Error('Supabase is not connected yet.'); const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; },
+    async signUp(email, password) { if (!sb) throw new Error('Supabase is not connected yet.'); const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }); if (error) throw error; return data; },
+    async signOut() { if (sb) await sb.auth.signOut(); user = null; await del('meta', 'lastPull'); state.lastPull = null; setStatus('signedout'); emit('auth'); },
+    async firstSyncUploadAll() { if (!sb || !user) return; Object.keys(state.days).forEach(id => state.outbox.add(id)); state.planDirty = true; await saveOutbox(); await Store.sync(); },
+
+    // ---------- Apple Health link ----------
+    async createHealthToken() {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const { data, error } = await sb.rpc('create_health_token');
+      if (error) throw error;
+      return data;
+    },
+    healthEndpoint() { const c = window.CUT_CONFIG || {}; return c.SUPABASE_URL ? c.SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/rpc/health_sync' : ''; },
+
+    // ---------- photos ----------
+    async putPhoto(key, blob) {
+      await put('photos', key, blob);
+      if (sb && user && navigator.onLine) {
+        try { await sb.storage.from('photos').upload(user.id + '/' + key + '.jpg', blob, { upsert: true, contentType: 'image/jpeg' }); } catch (e) { console.error(e); }
+      }
+    },
+    async getPhoto(key) {
+      const local = await get('photos', key);
+      if (local) return local;
+      if (sb && user && navigator.onLine) {
+        const { data } = await sb.storage.from('photos').download(user.id + '/' + key + '.jpg');
+        if (data) { await put('photos', key, data); return data; }
+      }
+      return null;
+    },
+    async photoKeys() {
+      const keys = new Set(Object.keys(await getAll('photos')));
+      if (sb && user && navigator.onLine) {
+        try { const { data } = await sb.storage.from('photos').list(user.id, { limit: 200 }); (data || []).forEach(f => keys.add(f.name.replace(/\.jpg$/, ''))); } catch (e) {}
+      }
+      return [...keys].sort();
+    },
+    async deletePhoto(key) {
+      await del('photos', key);
+      if (sb && user) { try { await sb.storage.from('photos').remove([user.id + '/' + key + '.jpg']); } catch (e) {} }
+    },
+
+    // ---------- push ----------
+    async savePushSubscription(sub) {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const j = sub.toJSON();
+      const { error } = await sb.from('push_subs').upsert({ user_id: user.id, endpoint: j.endpoint, sub: j }, { onConflict: 'endpoint' });
+      if (error) throw error;
+    }
+  };
+
+  window.Store = Store;
+})();
