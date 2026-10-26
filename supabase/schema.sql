@@ -37,6 +37,14 @@ create table if not exists public.push_subs (
   created_at timestamptz not null default now()
 );
 
+-- The server stamps every change itself, so a phone with a wrong clock can never hide a change from sync.
+create or replace function public.touch_updated_at() returns trigger language plpgsql as $$
+begin new.updated_at := now(); return new; end $$;
+drop trigger if exists days_touch on public.days;
+create trigger days_touch before insert or update on public.days for each row execute function public.touch_updated_at();
+drop trigger if exists settings_touch on public.settings;
+create trigger settings_touch before insert or update on public.settings for each row execute function public.touch_updated_at();
+
 -- Row-level security: you only ever see your own rows.
 alter table public.days          enable row level security;
 alter table public.settings      enable row level security;
@@ -69,16 +77,30 @@ grant execute on function public.create_health_token() to authenticated;
 -- payload keys: workouts, active_kcal, resting_kcal, weight_kg, steps, sleep_h
 create or replace function public.health_sync(p_token text, p_day date, p_payload jsonb)
 returns text language plpgsql security definer set search_path = public, extensions as $$
-declare uid uuid; clean jsonb := '{}'::jsonb; k text;
+declare uid uuid; clean jsonb := '{}'::jsonb; k text; v text; n numeric;
 begin
   select user_id into uid from public.health_tokens where token_hash = encode(digest(p_token, 'sha256'), 'hex');
   if uid is null then raise exception 'unknown token'; end if;
   if p_day is null or p_day > current_date + 1 or p_day < current_date - 60 then raise exception 'bad day'; end if;
   foreach k in array array['workouts','active_kcal','resting_kcal','weight_kg','steps','sleep_h'] loop
-    if p_payload ? k and jsonb_typeof(p_payload->k) = 'number' then clean := clean || jsonb_build_object(k, p_payload->k);
-    elsif p_payload ? k and jsonb_typeof(p_payload->k) = 'string' and (p_payload->>k) ~ '^[0-9]+([.,][0-9]+)?$' then
-      clean := clean || jsonb_build_object(k, replace(p_payload->>k, ',', '.')::numeric);
+    if not (p_payload ? k) then continue; end if;
+    if jsonb_typeof(p_payload->k) = 'number' then n := (p_payload->>k)::numeric;
+    elsif jsonb_typeof(p_payload->k) = 'string' then
+      -- Shortcuts can send "1,234.5", "96,4", "512 kcal": keep digits, read commas sensibly.
+      v := regexp_replace(p_payload->>k, '[^0-9.,]', '', 'g');
+      if v ~ ',' and v ~ '\.' then v := replace(v, ',', '');
+      elsif v ~ '^[0-9]{1,3}(,[0-9]{3})+$' then v := replace(v, ',', '');
+      else v := replace(v, ',', '.'); end if;
+      if v !~ '^[0-9]+(\.[0-9]+)?$' then continue; end if;
+      n := v::numeric;
+    else continue; end if;
+    if k = 'weight_kg' then
+      if n = 0 then continue; end if;
+      if n > 180 then n := n / 2.20462; elsif n < 30 then n := n * 6.35029; end if; -- sent in pounds or stones
+      n := round(n, 1);
     end if;
+    if k in ('workouts','steps') then n := round(n); end if;
+    clean := clean || jsonb_build_object(k, n);
   end loop;
   clean := clean || jsonb_build_object('synced_at', now());
   insert into public.days (user_id, day, health, updated_at) values (uid, p_day, clean, now())
@@ -122,3 +144,8 @@ returns text language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.vapid_public() from public;
 grant execute on function public.vapid_public() to anon, authenticated;
+
+-- ---------- Explicit access (newer Supabase projects don't grant table access by default) ----------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.days, public.settings, public.push_subs to authenticated;
+revoke all on public.health_tokens, public.push_keys from anon, authenticated;

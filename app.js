@@ -317,6 +317,16 @@
   function render() {
     last = compute();
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
+    renderWatchToday(); renderSafe();
+  }
+  function renderWatchToday() {
+    const lastW = watchLast(), r = rec(idOf(today)), h = r.health || {};
+    $('watchToday').hidden = !lastW;
+    if (!lastW) return;
+    $('wtWhen').textContent = 'Synced ' + ago(lastW);
+    $('wtWork').textContent = h.workouts != null ? h.workouts : '–';
+    $('wtActive').textContent = h.active_kcal != null ? kfmt(h.active_kcal) : '–';
+    $('wtSteps').textContent = h.steps != null ? kfmt(h.steps) : '–';
   }
 
   // ---------- toast + undo ----------
@@ -469,7 +479,7 @@
     const cfg = !!Store.connected, u = Store.user;
     $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || !!u; $('acctIn').hidden = !u;
     if (u) $('aWho').textContent = u.email || 'you';
-    $('watchNeedsAcct').hidden = !!u; $('watchReady').hidden = !u;
+    renderWatch(); renderSafe();
     renderSync(); renderRem();
   }
   $('sSave').addEventListener('click', async () => {
@@ -498,20 +508,71 @@
   $('aSync').addEventListener('click', async () => { await Store.sync(); toast(Store.status === 'synced' ? 'Synced' : 'Sync didn’t finish, it will retry'); });
   $('aUpload').addEventListener('click', async () => { await Store.firstSyncUploadAll(); toast(Store.status === 'synced' ? 'Everything uploaded' : 'Upload didn’t finish, it will retry'); });
 
-  // Apple Watch key
-  let shortcutBundle = '';
+  // Apple Watch link
+  let watchLink = '';
   $('wToken').addEventListener('click', async () => {
     try {
       const t = await Store.createHealthToken();
-      $('wTok').textContent = t; $('wUrl').textContent = Store.healthEndpoint(); $('wAnon').textContent = (window.CUT_CONFIG || {}).SUPABASE_ANON_KEY || '';
-      shortcutBundle = 'Key: ' + t + '\nAddress: ' + Store.healthEndpoint() + '\nApp key: ' + ((window.CUT_CONFIG || {}).SUPABASE_ANON_KEY || '');
-      $('wOut').hidden = false; $('watchStatus').textContent = 'Key created';
-    } catch (e) { toast('Couldn’t create the key. Check you’re signed in and online.'); }
+      watchLink = Store.healthLink(t);
+      $('wLink').textContent = watchLink; $('wOut').hidden = false; $('wGuide').open = true;
+      toast('Link created. Copy it now.');
+    } catch (e) { toast('Couldn’t create the link. Check you’re signed in and online.'); }
   });
   $('wCopy').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(shortcutBundle); toast('Copied'); }
-    catch (e) { const r = document.createRange(); r.selectNodeContents($('wOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selected. Copy it from the menu.'); }
+    try { await navigator.clipboard.writeText(watchLink); toast('Link copied'); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($('wLink')); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Selected. Copy it from the menu.'); }
   });
+  function watchLast() {
+    let best = null;
+    for (const r of Object.values(days())) { const t = r && r.health && r.health.synced_at; if (t && (!best || t > best)) best = t; }
+    return best;
+  }
+  function ago(iso) {
+    if (!iso) return '';
+    const d = new Date(iso), mins = Math.round((Date.now() - d) / 60000);
+    if (mins < 1) return 'just now'; if (mins < 60) return mins + ' min ago';
+    const sameDay = idOf(d) === idOf(new Date()), yest = idOf(d) === idOf(addDays(new Date(), -1));
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return sameDay ? 'today ' + hm : yest ? 'yesterday ' + hm : fmt(d) + ' ' + hm;
+  }
+  function renderWatch() {
+    const u = Store.user, lastW = watchLast();
+    $('watchNeedsText').textContent = !Store.connected ? 'Connects once the database is set up.' : 'Sign in to sync first. The Shortcut sends data to your private database.';
+    $('watchNeedsAcct').hidden = !!u; $('watchReady').hidden = !u;
+    $('watchStatus').textContent = lastW ? 'Last sync ' + ago(lastW) : 'Not connected';
+    $('wRun').hidden = !lastW;
+  }
+
+  // data safety
+  function renderSafe() {
+    const n = Object.values(days()).filter(r => r && Object.keys(r).some(k => k !== 'health' && r[k] != null && r[k] !== false && r[k] !== '')).length;
+    const u = Store.user, items = [];
+    items.push(['', 'Every tap is written to this phone’s storage before the screen updates, so closing the app can’t lose it. ' + n + ' day' + (n === 1 ? '' : 's') + ' saved here.']);
+    if (Store.persisted === true || standalone()) items.push(['', 'Protected: the phone won’t clear this app’s storage on its own' + (standalone() ? ' (opened from the Home Screen).' : '.')]);
+    else items.push(['warn', 'This browser may clear storage it thinks is unused. Open the app from your Home Screen icon to protect it, and keep the cloud copy on.']);
+    if (!Store.connected) items.push(['off', 'Cloud copy isn’t connected yet.']);
+    else if (!u) items.push(['warn', 'Cloud copy is off: sign in above and everything uploads.']);
+    else {
+      const p = Store.pending;
+      items.push([p ? 'warn' : '', p ? p + ' change' + (p === 1 ? '' : 's') + ' waiting to upload. They go up as soon as you’re online.' : 'Cloud copy up to date' + (Store.lastSyncAt ? ', last synced ' + ago(Store.lastSyncAt) : '') + '. A new phone gets everything back by signing in.']);
+    }
+    $('safeList').innerHTML = items.map(([c, t]) => '<li' + (c ? ' class="' + c + '"' : '') + '>' + esc(t) + '</li>').join('');
+    $('safeStatus').textContent = !u ? 'Phone only' : Store.pending ? 'Uploading' : 'Safe';
+    $('safeCheck').hidden = !u;
+    // Home banner: data that exists only on this phone
+    $('safeBanner').hidden = !(n > 0 && Store.connected && !u);
+  }
+  $('safeCheck').addEventListener('click', async () => {
+    $('safeMsg').textContent = 'Checking every day against the cloud copy…';
+    try {
+      const r = await Store.verify();
+      $('safeMsg').textContent = r.fixed
+        ? r.fixed + ' day' + (r.fixed === 1 ? ' was' : 's were') + ' missing or out of date in the cloud and ' + (r.pending ? 'will upload when you’re online.' : (r.fixed === 1 ? 'has' : 'have') + ' been uploaded again. Everything matches now.')
+        : 'All ' + r.local + ' days on this phone match the cloud copy exactly.';
+      renderSafe();
+    } catch (e) { $('safeMsg').textContent = navigator.onLine ? (e.message || 'The check didn’t finish.') : 'You’re offline. Your data is safe on the phone; check again when you’re online.'; }
+  });
+  $('safeBannerGo').addEventListener('click', () => show('settings', true));
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';
@@ -596,7 +657,7 @@
 
   // ---------- boot ----------
   setInterval(() => { const n = new Date(); if (idOf(n) !== idOf(today)) { today = n; render(); } }, 60000);
-  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); if (!$('tab-settings').hidden) renderSettings(); } });
+  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); renderSafe(); if (!$('tab-settings').hidden) renderSettings(); } });
 
   Store.init(PLAN_DEFAULT).then(() => {
     renderMode(); render(); renderSync();

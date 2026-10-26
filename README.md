@@ -16,7 +16,7 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 | `sw.js` | Service worker, so the app opens with no signal |
 | `config.js` | Supabase address and public key (empty = phone-only mode) |
 | `supabase/schema.sql` | Database tables, security rules, Apple Health endpoint, photo storage, reminder functions |
-| `supabase/functions/reminders/index.ts` | Edge Function that sends the daily reminders (Web Push, built on Web Crypto, no libraries) |
+| `supabase/functions/cut/index.ts` | Edge Function: receives Apple Watch data from the iPhone Shortcut and sends daily reminders (Web Push on Web Crypto, no libraries) |
 | `.github/workflows/reminders.yml` | Free hourly GitHub Action that pings the function (no secrets) |
 | `APPLE-WATCH-SHORTCUT.md` | How to connect the Apple Watch through an iPhone Shortcut |
 
@@ -28,7 +28,7 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 4. **Connect.** Put the Project URL and the `anon` public key into `config.js`. Never put the `service_role` key anywhere in this repo.
 5. **Install.** On the iPhone, open the app address in Safari → Share → Add to Home Screen.
 6. **Sign in.** Settings tab → Create account, confirm the email, sign in, then "Upload everything from this phone".
-7. **Reminders.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it `reminders`, paste `supabase/functions/reminders/index.ts`, deploy, then in its Details turn **Verify JWT** off. In the installed app: Settings → Reminders → pick a time → Turn on reminders → Test on this phone.
+7. **Reminders.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it `cut`, paste `supabase/functions/cut/index.ts`, deploy, then in its Details turn **Verify JWT** off. In the installed app: Settings → Reminders → pick a time → Turn on reminders → Test on this phone.
 
 Reminders need no paid service and no key handling: the function creates its own push key pair on first use and keeps it in a private table, and the GitHub Action only reads the public address from `config.js`. Works on iPhone 16.4 or later once the app is on the Home Screen.
 

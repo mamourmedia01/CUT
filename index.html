@@ -192,6 +192,18 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .energy>span.wide{grid-column:1/-1;font-size:.88rem}
 .energy b{font-family:var(--display);font-size:1.3rem;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1}
 @media (max-width:420px){.energy{grid-template-columns:1fr 1fr}}
+.guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+.guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
+.guide code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;background:var(--surface-2);border-radius:4px;padding:1px 4px}
+.checks{list-style:none;margin:6px 0 10px;padding:0;display:grid;gap:8px}
+.checks li{display:flex;gap:10px;align-items:flex-start;line-height:1.4}
+.checks li::before{content:"";flex:none;width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--done)}
+.checks li.warn::before{background:var(--cheat)}
+.checks li.off::before{background:var(--line)}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--cheat);border-radius:var(--r-md);padding:12px 14px;background:var(--surface)}
+.banner div{display:grid;gap:2px}.banner span{color:var(--muted,inherit);font-size:.9rem}
+a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .token{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85rem;background:var(--surface-2);border-radius:var(--r-sm);padding:10px;word-break:break-all;user-select:all}
 
 /* stats */
@@ -295,7 +307,22 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
     </div>
 
+    <div class="banner" id="safeBanner" hidden>
+      <div><b>Only saved on this phone</b><span id="safeBannerText">Sign in once so a copy is kept in your private database.</span></div>
+      <button class="btn" type="button" id="safeBannerGo">Back up</button>
+    </div>
+
     <button class="cta" type="button" id="ctaLog">Log today</button>
+
+    <div class="card" id="watchToday" hidden>
+      <div class="row"><span class="label">Apple Watch today</span><span class="label" id="wtWhen"></span></div>
+      <div class="tiles3">
+        <div><b id="wtWork">–</b><span>workouts</span></div>
+        <div><b id="wtActive">–</b><span>active kcal</span></div>
+        <div><b id="wtSteps">–</b><span>steps</span></div>
+      </div>
+      <div class="btns"><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
+    </div>
 
     <div class="card">
       <div class="row"><span class="label" id="bossLabel">Ten-day boss</span>
@@ -461,6 +488,13 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
     </div>
 
+    <div class="card" id="safeCard">
+      <div class="row"><span class="label">Your data</span><span class="label" id="safeStatus"></span></div>
+      <ul class="checks" id="safeList"></ul>
+      <div class="btns"><button class="btn" type="button" id="safeCheck">Check my data</button></div>
+      <small id="safeMsg"></small>
+    </div>
+
     <div class="card">
       <span class="label">Your plan</span>
       <div class="fields">
@@ -478,19 +512,34 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="btns"><button class="btn primary" type="button" id="sSave">Save plan</button></div>
     </div>
 
-    <div class="card">
-      <div class="row"><span class="label">Apple Watch</span><span class="label" id="watchStatus"></span></div>
-      <p class="note">Your watch feeds the app through a free iPhone Shortcut that reads Apple Health each night: workouts become sessions, active energy replaces the 1,000 per session, resting energy replaces the flat resting burn, and weigh-ins from your scale come straight in. What you type yourself always wins.</p>
-      <div id="watchNeedsAcct"><small>Sign in to sync first. The Shortcut sends data to your private database.</small></div>
+    <div class="card" id="watchCard">
+      <div class="row"><span class="label">Apple Watch</span><span class="label" id="watchStatus">Not connected</span></div>
+      <p class="note">Apple only lets App Store apps read Apple Health, so a free iPhone Shortcut does it: each night it reads your watch's workouts, active and resting calories, steps and any weigh-in, and sends them here. What you type yourself always wins.</p>
+      <div id="watchNeedsAcct"><small id="watchNeedsText">Sign in to sync first. The Shortcut sends data to your private database.</small></div>
       <div id="watchReady" hidden>
-        <div class="btns"><button class="btn primary" type="button" id="wToken">Create Shortcut key</button></div>
+        <div class="btns"><button class="btn primary" type="button" id="wToken">Create Shortcut link</button><a class="btn" id="wRun" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync" hidden>Sync watch now</a></div>
         <div id="wOut" hidden class="field">
-          <span class="label">Shortcut key (shown once, copy it now)</span><div class="token" id="wTok"></div>
-          <span class="label">Address</span><div class="token" id="wUrl"></div>
-          <span class="label">App key</span><div class="token" id="wAnon"></div>
-          <div class="btns"><button class="btn" type="button" id="wCopy">Copy all three</button></div>
+          <span class="label">Your Shortcut link (copy it now, it's shown once)</span><div class="token" id="wLink"></div>
+          <div class="btns"><button class="btn primary" type="button" id="wCopy">Copy link</button></div>
+          <small>Making a new link switches the old one off.</small>
         </div>
-        <small>Step-by-step setup: open <b>APPLE-WATCH-SHORTCUT.md</b> in your CUT repo on GitHub.</small>
+        <details class="guide" id="wGuide">
+          <summary>Set up the Shortcut (about 10 minutes, once)</summary>
+          <ol>
+            <li>Tap <b>Create Shortcut link</b> above, then <b>Copy link</b>.</li>
+            <li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name it exactly <b>Cut Log Sync</b>.</li>
+            <li>Add <b>Find Health Samples</b>: Type <b>Workouts</b>, Start Date <b>is today</b>. Then add <b>Count</b>.</li>
+            <li>Add <b>Find Health Samples</b>: <b>Active Energy</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b>, set to <b>Sum</b>.</li>
+            <li>Do the same pair twice more: <b>Resting Energy</b> + Sum, and <b>Steps</b> + Sum.</li>
+            <li>Add <b>Find Health Samples</b>: <b>Weight</b>, Start Date <b>is today</b>, Sort by Start Date, <b>Latest First</b>, Limit <b>1</b>.</li>
+            <li>Add <b>Get Contents of URL</b> and paste your link. Tap the arrow to show more: Method <b>POST</b>, Request Body <b>JSON</b>. Add five <b>Number</b> fields and fill each by tapping it and picking the matching result:
+              <code>workouts</code> = Count, <code>active_kcal</code> = Active Energy's Statistics, <code>resting_kcal</code> = Resting Energy's Statistics, <code>steps</code> = Steps' Statistics, <code>weight_kg</code> = the Weight Health Samples.</li>
+            <li>Add <b>Show Notification</b> and put <b>Contents of URL</b> in it.</li>
+            <li>Tap <b>▶</b>. Allow Health access when asked. You should see “Cut Log synced” with today's numbers.</li>
+            <li>Make it automatic: <b>Automation</b> tab, <b>+</b>, <b>Time of Day</b>, 23:55, Daily, <b>Run Immediately</b>, choose Cut Log Sync. Add a second one at 05:30 for night shifts. Running it more than once a day is fine, it just updates the day.</li>
+          </ol>
+          <small>If it says the key isn't valid, make a new link here and paste it into step 7. If weight never arrives, let your scale's app write to Apple Health.</small>
+        </details>
       </div>
     </div>
 

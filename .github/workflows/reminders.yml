@@ -1,5 +1,5 @@
 name: Reminders
-# Pings the "reminders" Supabase Edge Function once an hour. It needs no secrets:
+# Pings the "cut" Supabase Edge Function once an hour. It needs no secrets:
 # the database address and public key come from config.js, and the function holds the push key itself.
 # The hourly traffic also stops the free Supabase project from pausing.
 on:
@@ -21,7 +21,7 @@ jobs:
           URL=$(sed -n "s/.*SUPABASE_URL: *'\([^']*\)'.*/\1/p" config.js)
           KEY=$(sed -n "s/.*SUPABASE_ANON_KEY: *'\([^']*\)'.*/\1/p" config.js)
           if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Database not connected in config.js yet."; exit 0; fi
-          curl -sS --fail-with-body -X POST "${URL%/}/functions/v1/reminders?action=run" \
+          curl -sS --fail-with-body -X POST "${URL%/}/functions/v1/cut?action=run" \
             -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{}'
       # GitHub pauses scheduled workflows after 60 days without commits; re-enabling keeps it alive for free.
       - name: Keep schedule alive

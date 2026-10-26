@@ -1,13 +1,11 @@
 // @ts-nocheck  (plain JavaScript in a .ts file; Deno runs it as is)
-// Cut Log reminders: a Supabase Edge Function.
+// Cut Log server: one Supabase Edge Function named "cut". Uses only Web Crypto and fetch.
 //
-// Called once an hour by .github/workflows/reminders.yml (no secrets needed).
-// It creates its own Web Push key pair on first use and keeps it in a private table,
-// so no key ever has to be copied or pasted anywhere. Uses only Web Crypto and fetch.
-//
-//   POST ?action=run    hourly: send each phone its daily nudge if one is due
-//   POST ?action=init   return the public push key (creates the pair the first time)
-//   POST ?action=test   body {endpoint}: send a test push to that one phone
+//   POST ?action=health&k=KEY   the iPhone Shortcut sends today's Apple Watch numbers here
+//   POST ?action=run            hourly (GitHub Action): send each phone its daily reminder if due
+//   POST ?action=init           the public push key (the key pair is created on first use and kept
+//                               in a private table, so nothing ever has to be copied or pasted)
+//   POST ?action=test           body {endpoint}: send a test push to that one phone
 
 const APP_PATH = './#log';
 const CONTACT = 'mailto:mamourmedia01@gmail.com';
@@ -155,15 +153,45 @@ async function run(db, keys) {
   return { phones: subs.length, results: out };
 }
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+// ---------- Apple Watch (iPhone Shortcut) ----------
+// The Shortcut posts today's Apple Health numbers to ...?action=health&k=<personal key>.
+// No headers or dates needed: the day is today in the phone's zone (Europe/London unless &tz= is given).
+const HEALTH_KEYS = ['workouts', 'active_kcal', 'resting_kcal', 'weight_kg', 'steps', 'sleep_h'];
+async function health(db, req, q) {
+  const text = (s, status = 200) => new Response(s, { status, headers: Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS) });
+  const k = q.get('k') || '';
+  if (!k) return text('Missing key. Copy the link again from Cut Log → Settings → Apple Watch.', 400);
+  let body = {};
+  const raw = req.method === 'POST' ? await req.text() : '';
+  if (raw) { try { body = JSON.parse(raw); } catch (e) { body = Object.fromEntries(new URLSearchParams(raw)); } }
+  for (const key of HEALTH_KEYS) if (body[key] == null && q.get(key) != null) body[key] = q.get(key);
+  const payload = {};
+  for (const key of HEALTH_KEYS) { const v = body[key]; if (v !== undefined && v !== null && v !== '') payload[key] = typeof v === 'number' ? v : String(v); }
+  let tz = q.get('tz') || 'Europe/London'; try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); } catch (e) { tz = 'Europe/London'; }
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || '') ? body.day : localNow(tz).id;
+  try {
+    await db('rpc/health_sync', { method: 'POST', body: JSON.stringify({ p_token: k, p_day: day, p_payload: payload }) });
+  } catch (e) {
+    if (/unknown token/.test(e.message)) return text('That key isn’t valid any more. Make a new link in Cut Log → Settings → Apple Watch.', 401);
+    throw e;
+  }
+  const bits = [];
+  if (payload.workouts != null) bits.push(payload.workouts + ' workout' + (+payload.workouts === 1 ? '' : 's'));
+  if (payload.active_kcal != null) bits.push(Math.round(parseFloat(String(payload.active_kcal).replace(/,/g, ''))) + ' active kcal');
+  if (payload.steps != null) bits.push(payload.steps + ' steps');
+  return text('Cut Log synced ' + day + (bits.length ? ': ' + bits.join(', ') : ''));
+}
+
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, CORS) });
 
 export async function handle(req, env) {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const db = dbClient(env.url, env.key);
+    const q = new URL(req.url).searchParams, action = q.get('action') || 'run';
+    if (action === 'health') return await health(db, req, q);
     const keys = await getKeys(db);
-    const action = new URL(req.url).searchParams.get('action') || 'run';
     if (action === 'init') return json({ publicKey: keys.public_key });
     if (action === 'test') {
       const { endpoint } = await req.json().catch(() => ({}));

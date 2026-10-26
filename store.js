@@ -3,7 +3,7 @@
   const DB_NAME = 'cutlog', DB_VER = 1;
   let idb = null, sb = null, user = null;
   const listeners = new Set();
-  const state = { days: {}, plan: null, outbox: new Set(), planDirty: false, lastPull: null, status: 'local' };
+  const state = { days: {}, plan: null, outbox: new Set(), planDirty: false, lastPull: null, status: 'local', lastSyncAt: null, persisted: null };
 
   // ---------- IndexedDB helpers ----------
   function openDB() {
@@ -49,6 +49,9 @@
     get status() { return state.status; },
     get user() { return user; },
     get connected() { return !!sb; },
+    get pending() { return state.outbox.size + (state.planDirty ? 1 : 0); },
+    get lastSyncAt() { return state.lastSyncAt; },
+    get persisted() { return state.persisted; },
     on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
     async init(defaultPlan) {
@@ -57,6 +60,13 @@
       state.plan = Object.assign({}, defaultPlan, (await get('meta', 'plan')) || {});
       const ob = await get('meta', 'outbox'); if (ob) { state.outbox = new Set(ob.days || []); state.planDirty = !!ob.plan; }
       state.lastPull = (await get('meta', 'lastPull')) || null;
+      state.lastSyncAt = (await get('meta', 'lastSyncAt')) || null;
+      // Ask the browser to never clear this app's storage on its own (granted automatically
+      // for Home Screen apps on iPhone and for installed apps elsewhere).
+      try {
+        if (navigator.storage && navigator.storage.persisted) state.persisted = await navigator.storage.persisted();
+        if (!state.persisted && navigator.storage && navigator.storage.persist) state.persisted = await navigator.storage.persist();
+      } catch (e) {}
       const cfg = window.CUT_CONFIG || {};
       if (cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase) {
         sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -68,7 +78,10 @@
       }
       window.addEventListener('online', () => Store.sync());
       window.addEventListener('offline', () => { if (user) setStatus('offline'); });
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Store.sync(); });
+      // Visible: pull anything new (e.g. tonight's watch data). Hidden (app closed or switched away):
+      // push anything waiting straight away. Every tap is already on the phone's disk before this.
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' || Store.pending) Store.sync(); });
+      window.addEventListener('pagehide', () => { if (Store.pending) Store.sync(); });
       setInterval(() => { if (document.visibilityState === 'visible') Store.sync(); }, 60000);
     },
 
@@ -122,7 +135,8 @@
           await saveOutbox();
           // pull days
           let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).limit(1000);
-          if (state.lastPull) q = q.gt('updated_at', state.lastPull);
+          // Look back 5 minutes past the last pull: re-reading a row is harmless, missing one isn't.
+          if (state.lastPull) q = q.gt('updated_at', new Date(new Date(state.lastPull).getTime() - 5 * 60000).toISOString());
           const { data: rows, error: e2 } = await q;
           if (e2) throw e2;
           let changed = false;
@@ -132,7 +146,11 @@
             const base = state.outbox.has(id) ? Object.assign({}, local) : Object.assign({}, row.data || {});
             delete base.health;
             const rec = Object.assign(base, row.health ? { health: row.health } : {});
-            state.days[id] = rec; await put('days', id, rec); changed = true;
+            if (JSON.stringify(rec) !== JSON.stringify(state.days[id] || {})) {
+              if (Object.keys(rec).length) { state.days[id] = rec; await put('days', id, rec); }
+              else if (state.days[id]) { delete state.days[id]; await del('days', id); }
+              changed = true;
+            }
             if (!state.lastPull || row.updated_at > state.lastPull) state.lastPull = row.updated_at;
           }
           await put('meta', 'lastPull', state.lastPull);
@@ -141,6 +159,7 @@
             const { data: srow } = await sb.from('settings').select('data').eq('user_id', user.id).maybeSingle();
             if (srow && srow.data && JSON.stringify(srow.data) !== JSON.stringify(state.plan)) { state.plan = Object.assign({}, state.plan, srow.data); await put('meta', 'plan', state.plan); changed = true; }
           }
+          state.lastSyncAt = new Date().toISOString(); await put('meta', 'lastSyncAt', state.lastSyncAt);
           setStatus('synced');
           if (changed) emit('data');
         } catch (err) {
@@ -207,10 +226,26 @@
       await sb.from('push_subs').delete().eq('endpoint', endpoint);
     },
     get signedIn() { return !!(sb && user); },
+
+    // Compare every day on this phone with the cloud copy. Anything missing or different
+    // in the cloud is uploaded again. Returns what it found.
+    async verify() {
+      if (!sb || !user) throw new Error('Sign in first.');
+      await Store.sync();
+      const { data: rows, error } = await sb.from('days').select('day,data');
+      if (error) throw error;
+      const cloud = {}; (rows || []).forEach(r => { cloud[r.day] = r.data || {}; });
+      const norm = o => { const c = Object.assign({}, o || {}); delete c.health; Object.keys(c).forEach(k => { if (c[k] === null || c[k] === false || c[k] === '') delete c[k]; }); return JSON.stringify(Object.keys(c).sort().map(k => [k, c[k]])); };
+      const mine = Object.keys(state.days).filter(id => norm(state.days[id]) !== '[]');
+      const bad = mine.filter(id => norm(state.days[id]) !== norm(cloud[id]));
+      if (bad.length) { bad.forEach(id => state.outbox.add(id)); await saveOutbox(); await Store.sync(); }
+      return { local: mine.length, cloud: Object.keys(cloud).filter(id => norm(cloud[id]) !== '[]').length, fixed: bad.length, pending: Store.pending };
+    },
+    healthLink(token) { const c = window.CUT_CONFIG || {}; return c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/cut?action=health&k=' + encodeURIComponent(token); },
     // Reminders: the push key lives in the database; the Edge Function creates it the first time.
     _fn(action, body) {
       const c = window.CUT_CONFIG || {};
-      return fetch(c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/reminders?action=' + action, {
+      return fetch(c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/cut?action=' + action, {
         method: 'POST', headers: { 'Content-Type': 'application/json', apikey: c.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + c.SUPABASE_ANON_KEY },
         body: JSON.stringify(body || {})
       }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Reminder service error ' + r.status); return j; });
