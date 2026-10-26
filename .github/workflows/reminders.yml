@@ -26,7 +26,7 @@ jobs:
         env:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           TEST: ${{ inputs.test }}
-          APP_URL: https://mamourmedia01.github.io/cut/
+          APP_URL: https://mamourmedia01.github.io/CUT/
       # GitHub pauses scheduled workflows after 60 days without commits; re-enabling keeps it alive for free.
       - name: Keep schedule alive
         if: github.event_name == 'schedule'
