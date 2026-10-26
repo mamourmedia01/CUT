@@ -206,7 +206,22 @@
       if (!sb || !user) return;
       await sb.from('push_subs').delete().eq('endpoint', endpoint);
     },
-    get signedIn() { return !!(sb && user); }
+    get signedIn() { return !!(sb && user); },
+    // Reminders: the push key lives in the database; the Edge Function creates it the first time.
+    _fn(action, body) {
+      const c = window.CUT_CONFIG || {};
+      return fetch(c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/reminders?action=' + action, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: c.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + c.SUPABASE_ANON_KEY },
+        body: JSON.stringify(body || {})
+      }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Reminder service error ' + r.status); return j; });
+    },
+    async vapidPublic() {
+      if (!sb) throw new Error('Supabase is not connected yet.');
+      const { data } = await sb.rpc('vapid_public');
+      if (data) return data;
+      return (await Store._fn('init')).publicKey;
+    },
+    async testPush(endpoint) { return Store._fn('test', { endpoint }); }
   };
 
   window.Store = Store;

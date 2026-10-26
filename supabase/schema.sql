@@ -105,47 +105,20 @@ alter table public.push_subs add column if not exists prefs jsonb not null defau
 alter table public.push_subs add column if not exists tz text not null default 'Europe/London';
 alter table public.push_subs add column if not exists last_sent date;
 
--- The hourly GitHub Action proves who it is with a key derived from the VAPID private key
--- (a repo secret). Only a hash is stored here, so publishing this file reveals nothing,
--- and the Supabase service_role key is never needed anywhere.
-create table if not exists public.cron_keys (id int primary key default 1, key_hash text not null);
-alter table public.cron_keys enable row level security;
-insert into public.cron_keys (id, key_hash) values (1, 'f932542662c8bc0d8572e2575853691c9456cd928ad2871337bd624962a290ce')
-on conflict (id) do update set key_hash = excluded.key_hash;
+-- The push key pair. The "reminders" Edge Function creates it on first use; nobody copies it anywhere.
+-- No policies, so only the Edge Function (service role) can read the private half.
+create table if not exists public.push_keys (
+  id          int primary key default 1 check (id = 1),
+  public_key  text not null,
+  private_jwk jsonb not null,
+  created_at  timestamptz not null default now()
+);
+alter table public.push_keys enable row level security;
 
-create or replace function public._cron_ok(p_key text) returns boolean
-language sql security definer set search_path = public, extensions as $$
-  select exists (select 1 from public.cron_keys where key_hash = encode(digest(coalesce(p_key, ''), 'sha256'), 'hex'));
+-- The app asks for the public half before subscribing a phone.
+create or replace function public.vapid_public()
+returns text language sql stable security definer set search_path = public as $$
+  select public_key from public.push_keys where id = 1;
 $$;
-revoke all on function public._cron_ok(text) from public, anon, authenticated;
-
--- Everything the sender needs: each phone, its owner's plan, and the last 120 days of taps.
-create or replace function public.reminder_batch(p_key text)
-returns jsonb language plpgsql security definer set search_path = public, extensions as $$
-begin
-  if not public._cron_ok(p_key) then raise exception 'bad key'; end if;
-  return coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'endpoint', s.endpoint, 'sub', s.sub, 'prefs', s.prefs, 'tz', s.tz, 'last_sent', s.last_sent,
-      'plan', (select st.data from public.settings st where st.user_id = s.user_id),
-      'days', (select coalesce(jsonb_object_agg(d.day::text, d.data - 'health'), '{}'::jsonb)
-               from public.days d where d.user_id = s.user_id and d.day >= current_date - 120)))
-    from public.push_subs s), '[]'::jsonb);
-end $$;
-
-create or replace function public.reminder_done(p_key text, p_endpoint text, p_day date)
-returns void language plpgsql security definer set search_path = public, extensions as $$
-begin
-  if not public._cron_ok(p_key) then raise exception 'bad key'; end if;
-  update public.push_subs set last_sent = p_day where endpoint = p_endpoint;
-end $$;
-
-create or replace function public.reminder_drop(p_key text, p_endpoint text)
-returns void language plpgsql security definer set search_path = public, extensions as $$
-begin
-  if not public._cron_ok(p_key) then raise exception 'bad key'; end if;
-  delete from public.push_subs where endpoint = p_endpoint;
-end $$;
-
-revoke all on function public.reminder_batch(text), public.reminder_done(text, text, date), public.reminder_drop(text, text) from public;
-grant execute on function public.reminder_batch(text), public.reminder_done(text, text, date), public.reminder_drop(text, text) to anon;
+revoke all on function public.vapid_public() from public;
+grant execute on function public.vapid_public() to anon, authenticated;

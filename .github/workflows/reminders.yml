@@ -1,32 +1,28 @@
 name: Reminders
+# Pings the "reminders" Supabase Edge Function once an hour. It needs no secrets:
+# the database address and public key come from config.js, and the function holds the push key itself.
+# The hourly traffic also stops the free Supabase project from pausing.
 on:
   schedule:
-    - cron: '17 * * * *'   # hourly; each phone gets its nudge at the hour it picked
+    - cron: '17 * * * *'
   workflow_dispatch:
-    inputs:
-      test:
-        description: 'Send a test notification to every phone now'
-        type: boolean
-        default: false
 permissions:
   contents: read
   actions: write
-concurrency: { group: reminders, cancel-in-progress: false }
 jobs:
-  send:
+  ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm install --no-audit --no-fund
-        working-directory: scripts
-      - run: node scripts/send-reminders.mjs
-        env:
-          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
-          TEST: ${{ inputs.test }}
-          APP_URL: https://mamourmedia01.github.io/CUT/
+        with: { sparse-checkout: config.js, sparse-checkout-cone-mode: false }
+      - name: Run reminders
+        run: |
+          URL=$(sed -n "s/.*SUPABASE_URL: *'\([^']*\)'.*/\1/p" config.js)
+          KEY=$(sed -n "s/.*SUPABASE_ANON_KEY: *'\([^']*\)'.*/\1/p" config.js)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Database not connected in config.js yet."; exit 0; fi
+          curl -sS --fail-with-body -X POST "${URL%/}/functions/v1/reminders?action=run" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{}'
       # GitHub pauses scheduled workflows after 60 days without commits; re-enabling keeps it alive for free.
       - name: Keep schedule alive
         if: github.event_name == 'schedule'

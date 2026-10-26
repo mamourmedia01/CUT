@@ -529,10 +529,10 @@
     $('remHour').value = String(remPrefs.hour); setSeg($('segRem'), remPrefs);
     const u = Store.user;
     let why = '';
-    if (!u) why = 'Sign in to sync first. Reminders are sent from your private database.';
+    if (!Store.connected) why = 'Reminders switch on once the database is connected.';
+    else if (!u) why = 'Sign in to sync first. Reminders are sent from your private database.';
     else if (isIOS && !standalone()) why = 'On iPhone, reminders only work once the app is on your Home Screen: Safari, Share, Add to Home Screen, then open it from there.';
     else if (!pushOK()) why = 'This browser can’t receive notifications.';
-    else if (!(window.CUT_CONFIG || {}).VAPID_PUBLIC_KEY) why = 'Reminders aren’t set up in config.js yet.';
     $('remNeeds').hidden = !why; $('remNeedsText').textContent = why; $('remReady').hidden = !!why;
     if (why) { $('remStatus').textContent = 'Off'; return; }
     const sub = await currentSub(), on = !!sub && Notification.permission === 'granted';
@@ -550,14 +550,15 @@
       if (perm !== 'granted') { remMsg('Permission wasn’t given, so no reminders. You can allow it later in Settings.'); renderRem(); return; }
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
-      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(window.CUT_CONFIG.VAPID_PUBLIC_KEY) });
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(await Store.vapidPublic()) });
       await Store.savePushSubscription(sub, remPrefs);
       remMsg(''); toast('Reminders on at ' + pad(remPrefs.hour) + ':00'); renderRem();
     } catch (e) { console.error(e); remMsg('Couldn’t turn reminders on. Check you’re online and signed in, then try again.'); }
   });
   $('remTest').addEventListener('click', async () => {
-    try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('Cut Log', { body: 'Reminders work on this phone. See you at ' + pad(remPrefs.hour) + ':00.', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#log' } }); }
-    catch (e) { remMsg('The test didn’t show. Check notifications are allowed for this app.'); }
+    // A real push from the server, the same route the daily reminder takes.
+    try { remMsg('Sending a test…'); const sub = await currentSub(); const r = await Store.testPush(sub && sub.endpoint); remMsg(r.result === 'sent' ? 'Sent. It should arrive in a few seconds.' : 'The push service said: ' + r.result); }
+    catch (e) { remMsg(e.message || 'The test didn’t send. Check you’re online.'); }
   });
   $('remOff').addEventListener('click', async () => {
     const sub = await currentSub();
