@@ -3,3 +3,4 @@ backup*.json
 cut-log-backup-*.json
 .DS_Store
 node_modules/
+scripts/node_modules/

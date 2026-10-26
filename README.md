@@ -15,7 +15,8 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 | `store.js` | Saves on the phone (IndexedDB) and syncs to Supabase when signed in |
 | `sw.js` | Service worker, so the app opens with no signal |
 | `config.js` | Supabase address and public key (empty = phone-only mode) |
-| `supabase/schema.sql` | Database tables, security rules, Apple Health endpoint, photo storage |
+| `supabase/schema.sql` | Database tables, security rules, Apple Health endpoint, photo storage, reminder functions |
+| `scripts/send-reminders.mjs` + `.github/workflows/reminders.yml` | Hourly free GitHub Action that sends each phone its daily reminder |
 | `APPLE-WATCH-SHORTCUT.md` | How to connect the Apple Watch through an iPhone Shortcut |
 
 ## Setup
@@ -26,6 +27,9 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 4. **Connect.** Put the Project URL and the `anon` public key into `config.js`. Never put the `service_role` key anywhere in this repo.
 5. **Install.** On the iPhone, open the app address in Safari → Share → Add to Home Screen.
 6. **Sign in.** Settings tab → Create account, confirm the email, sign in, then "Upload everything from this phone".
+7. **Reminders.** Repo Settings → Secrets and variables → Actions → New repository secret named `VAPID_PRIVATE_KEY`. Then in the installed app: Settings → Reminders → pick a time → Turn on reminders. To test from GitHub: Actions → Reminders → Run workflow → tick *test*.
+
+Reminders need no paid service and no Supabase `service_role` key: the Action reads `config.js`, signs in to three locked database functions with a key derived from the VAPID secret, and sends standard Web Push (iPhone 16.4 or later, app added to the Home Screen).
 
 ## The rules (summary)
 

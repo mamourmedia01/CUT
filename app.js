@@ -470,7 +470,7 @@
     $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || !!u; $('acctIn').hidden = !u;
     if (u) $('aWho').textContent = u.email || 'you';
     $('watchNeedsAcct').hidden = !!u; $('watchReady').hidden = !u;
-    renderSync();
+    renderSync(); renderRem();
   }
   $('sSave').addEventListener('click', async () => {
     const p = Object.assign({}, plan());
@@ -511,6 +511,58 @@
   $('wCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(shortcutBundle); toast('Copied'); }
     catch (e) { const r = document.createRange(); r.selectNodeContents($('wOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selected. Copy it from the menu.'); }
+  });
+
+  // reminders (web push)
+  const REM_KEY = 'cutlog-rem';
+  let remPrefs = { hour: 20, log: true, protein: true, waist: true };
+  try { const j = JSON.parse(localStorage.getItem(REM_KEY) || 'null'); if (j) remPrefs = Object.assign(remPrefs, j); } catch (e) {}
+  const saveRemLocal = () => { try { localStorage.setItem(REM_KEY, JSON.stringify(remPrefs)); } catch (e) {} };
+  const pushOK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const remMsg = t => { $('remMsg').textContent = t; };
+  const vapidBytes = k => { const b = (k + '='.repeat((4 - k.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'); const r = atob(b); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+  (function fillHours() { const sel = $('remHour'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = pad(h) + ':00'; sel.appendChild(o); } })();
+  async function currentSub() { if (!pushOK()) return null; try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (e) { return null; } }
+  async function renderRem() {
+    $('remHour').value = String(remPrefs.hour); setSeg($('segRem'), remPrefs);
+    const u = Store.user;
+    let why = '';
+    if (!u) why = 'Sign in to sync first. Reminders are sent from your private database.';
+    else if (isIOS && !standalone()) why = 'On iPhone, reminders only work once the app is on your Home Screen: Safari, Share, Add to Home Screen, then open it from there.';
+    else if (!pushOK()) why = 'This browser can’t receive notifications.';
+    else if (!(window.CUT_CONFIG || {}).VAPID_PUBLIC_KEY) why = 'Reminders aren’t set up in config.js yet.';
+    $('remNeeds').hidden = !why; $('remNeedsText').textContent = why; $('remReady').hidden = !!why;
+    if (why) { $('remStatus').textContent = 'Off'; return; }
+    const sub = await currentSub(), on = !!sub && Notification.permission === 'granted';
+    $('remStatus').textContent = on ? 'On at ' + pad(remPrefs.hour) + ':00' : Notification.permission === 'denied' ? 'Blocked' : 'Off';
+    $('remOn').textContent = on ? 'Save reminder settings' : 'Turn on reminders';
+    $('remTest').hidden = !on; $('remOff').hidden = !on;
+    if (Notification.permission === 'denied') remMsg('Notifications are blocked for this app. Allow them in your phone’s Settings, then come back.');
+  }
+  $('remHour').addEventListener('change', () => { remPrefs.hour = Number($('remHour').value); saveRemLocal(); });
+  $('segRem').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; remPrefs[b.dataset.v] = !remPrefs[b.dataset.v]; saveRemLocal(); setSeg($('segRem'), remPrefs); });
+  $('remOn').addEventListener('click', async () => {
+    try {
+      remMsg('Asking for permission…');
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { remMsg('Permission wasn’t given, so no reminders. You can allow it later in Settings.'); renderRem(); return; }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(window.CUT_CONFIG.VAPID_PUBLIC_KEY) });
+      await Store.savePushSubscription(sub, remPrefs);
+      remMsg(''); toast('Reminders on at ' + pad(remPrefs.hour) + ':00'); renderRem();
+    } catch (e) { console.error(e); remMsg('Couldn’t turn reminders on. Check you’re online and signed in, then try again.'); }
+  });
+  $('remTest').addEventListener('click', async () => {
+    try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('Cut Log', { body: 'Reminders work on this phone. See you at ' + pad(remPrefs.hour) + ':00.', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#log' } }); }
+    catch (e) { remMsg('The test didn’t show. Check notifications are allowed for this app.'); }
+  });
+  $('remOff').addEventListener('click', async () => {
+    const sub = await currentSub();
+    if (sub) { try { await Store.removePushSubscription(sub.endpoint); } catch (e) {} try { await sub.unsubscribe(); } catch (e) {} }
+    toast('Reminders off'); remMsg(''); renderRem();
   });
 
   // backup

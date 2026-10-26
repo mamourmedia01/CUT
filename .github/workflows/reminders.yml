@@ -1,0 +1,34 @@
+name: Reminders
+on:
+  schedule:
+    - cron: '17 * * * *'   # hourly; each phone gets its nudge at the hour it picked
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Send a test notification to every phone now'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: write
+concurrency: { group: reminders, cancel-in-progress: false }
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+        working-directory: scripts
+      - run: node scripts/send-reminders.mjs
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          TEST: ${{ inputs.test }}
+          APP_URL: https://mamourmedia01.github.io/cut/
+      # GitHub pauses scheduled workflows after 60 days without commits; re-enabling keeps it alive for free.
+      - name: Keep schedule alive
+        if: github.event_name == 'schedule'
+        run: gh api -X PUT repos/${{ github.repository }}/actions/workflows/reminders.yml/enable || true
+        env: { GH_TOKEN: '${{ github.token }}' }

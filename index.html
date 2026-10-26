@@ -174,6 +174,7 @@ button{-webkit-tap-highlight-color:transparent}
 .seg button[data-v="cheat"][aria-pressed="true"]{background:var(--cheat);border-color:var(--cheat);color:#fff}
 .seg button[data-v="broken"][aria-pressed="true"]{background:var(--tee);border-color:var(--tee);color:var(--on-blue)}
 .seg button[data-v="protein"][aria-pressed="true"]{background:var(--xp);border-color:var(--xp);color:var(--xp-ink)}
+#segRem button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .mode{display:flex;flex-direction:column;gap:8px;padding-inline:4px}
 .mode .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface-2);border-radius:var(--r-md);padding:4px}
 .mode .seg button{border:0;background:transparent;font-family:var(--display);font-weight:800;font-size:1.05rem;text-transform:uppercase;letter-spacing:.04em}
@@ -490,6 +491,24 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <div class="btns"><button class="btn" type="button" id="wCopy">Copy all three</button></div>
         </div>
         <small>Step-by-step setup: open <b>APPLE-WATCH-SHORTCUT.md</b> in your CUT repo on GitHub.</small>
+      </div>
+    </div>
+
+    <div class="card" id="remCard">
+      <div class="row"><span class="label">Reminders</span><span class="label" id="remStatus">Off</span></div>
+      <p class="note">One nudge a day at the time you pick: tap the day in, protein day, and the Sunday waist check. Nothing is sent if there's nothing to do.</p>
+      <div id="remNeeds"><small id="remNeedsText">Sign in to sync first. Reminders are sent from your private database.</small></div>
+      <div id="remReady" hidden>
+        <div class="fields" style="grid-template-columns:1fr">
+          <div class="field"><label class="label" for="remHour">Remind me at</label><select id="remHour"></select></div>
+        </div>
+        <div class="seg" id="segRem" style="margin-top:10px">
+          <button type="button" data-v="log" aria-pressed="true">Log the day</button>
+          <button type="button" data-v="protein" aria-pressed="true">Protein day</button>
+          <button type="button" data-v="waist" aria-pressed="true">Sunday waist</button>
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="remOn">Turn on reminders</button><button class="btn" type="button" id="remTest" hidden>Test on this phone</button><button class="btn danger" type="button" id="remOff" hidden>Turn off</button></div>
+        <small id="remMsg"></small>
       </div>
     </div>
 

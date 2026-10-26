@@ -195,12 +195,18 @@
     },
 
     // ---------- push ----------
-    async savePushSubscription(sub) {
+    async savePushSubscription(sub, prefs) {
       if (!sb || !user) throw new Error('Sign in first.');
       const j = sub.toJSON();
-      const { error } = await sb.from('push_subs').upsert({ user_id: user.id, endpoint: j.endpoint, sub: j }, { onConflict: 'endpoint' });
+      let tz = 'Europe/London'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) {}
+      const { error } = await sb.from('push_subs').upsert({ user_id: user.id, endpoint: j.endpoint, sub: j, prefs, tz }, { onConflict: 'endpoint' });
       if (error) throw error;
-    }
+    },
+    async removePushSubscription(endpoint) {
+      if (!sb || !user) return;
+      await sb.from('push_subs').delete().eq('endpoint', endpoint);
+    },
+    get signedIn() { return !!(sb && user); }
   };
 
   window.Store = Store;
