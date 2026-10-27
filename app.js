@@ -483,6 +483,8 @@
       const pk = Store.passkeys;
       $('pkOffer').hidden = pk.length > 0; $('pkOn').hidden = !pk.length;
       $('pkNames').textContent = pk.length ? ' (' + pk.map(x => x.friendly_name || x.friendlyName || 'passkey').join(', ') + ')' : '';
+      $('evText').textContent = Store.emailVerified ? 'Email verified ✓' : 'Email not verified.';
+      $('evBtn').hidden = Store.emailVerified;
     }
     if (u && anon) {
       const pending = u.new_email || (u.email && !u.email_confirmed_at ? u.email : '');
@@ -523,6 +525,21 @@
   $('pkIn').addEventListener('click', async () => {
     try { authMsg('Waiting for Face ID…'); await Store.passkeySignIn(); authMsg(''); showSignIn = false; renderSettings(); toast('Signed in with Face ID'); }
     catch (e) { authMsg(pkError(e)); }
+  });
+  $('aCreate').addEventListener('click', async () => {
+    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
+    try {
+      authMsg('Creating your account…');
+      const r = await Store.createAccount(em);
+      if (r === 'in') { authMsg(''); showSignIn = false; renderSettings(); toast('Account created. Now turn on Face ID.'); setTimeout(() => { const b = $('pkAdd'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80); }
+      else authMsg('Check your email and tap the link to finish.');
+    } catch (e) {
+      authMsg(/already|exists|registered/i.test((e.code || '') + (e.message || '')) ? 'You already have an account with that email. Tap Sign in with Face ID, or Email me a sign-in link.' : (e.message || 'Couldn’t create the account. Check you’re online.'));
+    }
+  });
+  $('evBtn').addEventListener('click', async () => {
+    try { $('pkMsg').textContent = 'Sending…'; await Store.verifyEmail(); $('pkMsg').textContent = 'Sent. Tap the link in the email to verify. If it doesn’t arrive, the free email allowance is used up for the hour: try later.'; }
+    catch (e) { $('pkMsg').textContent = /rate|too many/i.test(e.message || '') ? 'The free email allowance is used up for the hour. Try again later. Everything else works without it.' : (e.message || 'Couldn’t send.'); }
   });
   $('aLink').addEventListener('click', async () => {
     const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }

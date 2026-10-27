@@ -487,9 +487,10 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <p class="note" id="acctNoCfg">Sync isn't connected yet. Everything is saved on this phone and works offline.</p>
         <div id="acctForm" hidden>
           <div class="btns"><button class="btn primary" type="button" id="pkIn">Sign in with Face ID</button></div>
-          <p class="note" style="margin-top:12px"><b>New to Cut Log?</b> Create your account with just your email: we send a link, you tap it, done. No password. Same box if you already have an account but no Face ID on this phone.</p>
+          <p class="note" style="margin-top:12px"><b>New to Cut Log?</b> Enter your email and you're in straight away. No password, no waiting for an email.</p>
           <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email"></div></div>
-          <div class="btns" style="margin-top:10px"><button class="btn" type="button" id="aLink">Create account / email me a link</button></div>
+          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="aCreate">Create account</button><button class="btn" type="button" id="aLink">Email me a sign-in link</button></div>
+          <small>Already have an account but no Face ID on this phone? Use <b>Email me a sign-in link</b>.</small>
           <small id="aMsg"></small>
         </div>
       </div>
@@ -514,6 +515,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <div class="btns"><button class="btn primary" type="button" id="pkAdd">Turn on Face ID</button></div>
         </div>
         <p class="note" id="pkOn" hidden>Face ID sign-in is on<span id="pkNames"></span>.</p>
+        <p class="note" id="evLine"><span id="evText"></span> <button class="linkbtn" type="button" id="evBtn">Verify my email (optional)</button></p>
         <div class="btns"><button class="btn" type="button" id="aSync">Sync now</button><button class="btn danger" type="button" id="aOut">Sign out</button></div>
         <small id="pkMsg"></small>
       </div>

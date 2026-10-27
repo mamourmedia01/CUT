@@ -68,6 +68,8 @@
         if (!state.persisted && navigator.storage && navigator.storage.persist) state.persisted = await navigator.storage.persist();
       } catch (e) {}
       const cfg = window.CUT_CONFIG || {};
+      // Arriving from an email link? Remember it, so the email can be marked verified once signed in.
+      const fromLink = /type=(magiclink|signup|email|invite|email_change)/.test(location.hash + location.search);
       if (cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase) {
         sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, experimental: { passkey: true } } });
         const { data } = await sb.auth.getSession();
@@ -81,6 +83,9 @@
         sb.auth.onAuthStateChange((_e, session) => { const was = user && user.id; user = session ? session.user : null; emit('auth'); if (user && user.id !== was) Store._onUser(); });
         setStatus(user ? (navigator.onLine ? 'syncing' : 'offline') : 'signedout');
         if (user) Store._onUser();
+        if (user && fromLink && !(user.user_metadata || {}).email_verified_by_link) {
+          try { const { data: u2 } = await sb.auth.updateUser({ data: { email_verified_by_link: true } }); if (u2 && u2.user) { user = u2.user; emit('auth'); } } catch (e) {}
+        }
       }
       window.addEventListener('online', () => Store.sync());
       window.addEventListener('offline', () => { if (user) setStatus('offline'); });
@@ -213,6 +218,24 @@
       if (error) throw error;
       await Store.refreshPasskeys();
       return data;
+    },
+    // Instant account: no email is sent. A random password is made and thrown away;
+    // you sign in with Face ID (or an email link if you ever need one).
+    async createAccount(email) {
+      if (!sb) throw new Error('Not connected yet.');
+      const b = crypto.getRandomValues(new Uint8Array(32)); let pw = ''; b.forEach(x => { pw += String.fromCharCode(x); });
+      pw = btoa(pw).replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + 'Aa1!';
+      const { data, error } = await sb.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (error) throw error;
+      if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { const e = new Error('exists'); e.code = 'user_already_exists'; throw e; }
+      return data && data.session ? 'in' : 'confirm';
+    },
+    get emailVerified() { return !!(user && user.user_metadata && user.user_metadata.email_verified_by_link); },
+    // Optional: prove the email is yours. Sends a sign-in link; opening it marks the email verified.
+    async verifyEmail() {
+      if (!sb || !user || !user.email) throw new Error('Not signed in.');
+      const { error } = await sb.auth.signInWithOtp({ email: user.email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: false } });
+      if (error) throw error;
     },
     // New or returning user: one-time sign-in link. Automatic (anonymous) account: confirm an email on it.
     async emailLink(email) {
