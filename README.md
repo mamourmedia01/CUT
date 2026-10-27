@@ -27,7 +27,7 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 3. **Auth address.** Supabase → Authentication → URL Configuration → Site URL = the GitHub Pages address.
 4. **Connect.** Put the Project URL and the `anon` public key into `config.js`. Never put the `service_role` key anywhere in this repo.
 5. **Install.** On the iPhone, open the app address in Safari → Share → Add to Home Screen.
-6. **Sign in.** Settings tab → Create account, confirm the email, sign in, then "Upload everything from this phone".
+6. **Backup.** Supabase → Authentication → Sign In / Providers → turn on **Allow anonymous sign-ins** → Save. The app then backs itself up the moment it opens (no sign-up), and an email can be added later in Settings to restore on a new phone. Without it, the app shows an email sign-up form instead.
 7. **Reminders.** Supabase → Edge Functions → Deploy a new function → Via editor. Name it `cut`, paste `supabase/functions/cut/index.ts`, deploy, keeping **Verify JWT** on (the app, the hourly Action and the Shortcut all send the public `anon` key). In the installed app: Settings → Reminders → pick a time → Turn on reminders → Test on this phone.
 
 Reminders need no paid service and no key handling: the function creates its own push key pair on first use and keeps it in a private table, and the GitHub Action only reads the public address from `config.js`. Works on iPhone 16.4 or later once the app is on the Home Screen.

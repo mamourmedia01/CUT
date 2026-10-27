@@ -192,6 +192,12 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .energy>span.wide{grid-column:1/-1;font-size:.88rem}
 .energy b{font-family:var(--display);font-size:1.3rem;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1}
 @media (max-width:420px){.energy{grid-template-columns:1fr 1fr}}
+.steps{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:10px}
+.steps li{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:44px}
+.steps li div{display:grid;gap:2px}.steps li span{color:var(--muted);font-size:.85rem}
+.steps li.done b{color:var(--muted);text-decoration:line-through}
+.steps .tick{color:var(--done);font-weight:800}
+.linkbtn{font:inherit;font-size:.85rem;background:none;border:0;color:var(--muted);cursor:pointer;min-height:44px;padding:0 4px}
 .guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
@@ -279,6 +285,17 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div><b id="alarmTitle">Strength dropping</b><span id="alarmText"></span></div>
     </div>
 
+    <div class="card" id="setup" hidden>
+      <div class="row"><span class="label">Get set up</span><button class="linkbtn" type="button" id="setupHide">Hide</button></div>
+      <ol class="steps" id="setupList"></ol>
+    </div>
+
+    <div class="banner" id="safeBanner" hidden>
+      <div><b>Only saved on this phone</b><span id="safeBannerText">Sign in once so a copy is kept in your private database.</span></div>
+      <button class="btn" type="button" id="safeBannerGo">Back up</button>
+    </div>
+
+
     <div class="card" style="gap:8px">
       <div class="row"><span class="label" id="goalLabel">102 kg to 85 kg</span><span class="label" id="dates"></span></div>
       <div class="track" aria-hidden="true"><i id="trackFill" style="width:0%"></i></div>
@@ -305,11 +322,6 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <div class="bar xp" aria-hidden="true"><i id="xpFill" style="width:0%"></i></div>
         <small id="xpText">0 XP</small>
       </div>
-    </div>
-
-    <div class="banner" id="safeBanner" hidden>
-      <div><b>Only saved on this phone</b><span id="safeBannerText">Sign in once so a copy is kept in your private database.</span></div>
-      <button class="btn" type="button" id="safeBannerGo">Back up</button>
     </div>
 
     <button class="cta" type="button" id="ctaLog">Log today</button>
@@ -482,9 +494,21 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <small id="aMsg"></small>
         </div>
       </div>
+      <div id="acctAnon" hidden>
+        <p class="note"><b>Backed up automatically.</b> Everything you log is copied to your private database as you go. Nothing to sign up for.</p>
+        <details class="guide" id="anonMore">
+          <summary>Optional: add your email so you can restore on a new phone</summary>
+          <div class="fields" style="grid-template-columns:1fr 1fr">
+            <div class="field"><label class="label" for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="email"></div>
+            <div class="field"><label class="label" for="lPass">New password</label><input id="lPass" type="password" autocomplete="new-password"></div>
+          </div>
+          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="lSave">Save my login</button><button class="btn" type="button" id="lHave">I already have an account</button></div>
+          <small id="lMsg"></small>
+        </details>
+      </div>
       <div id="acctIn" hidden>
         <p class="note">Signed in as <b id="aWho"></b>. Your days, settings and photos sync to your private database.</p>
-        <div class="btns"><button class="btn" type="button" id="aSync">Sync now</button><button class="btn" type="button" id="aUpload">Upload everything from this phone</button><button class="btn danger" type="button" id="aOut">Sign out</button></div>
+        <div class="btns"><button class="btn" type="button" id="aSync">Sync now</button><button class="btn danger" type="button" id="aOut">Sign out</button></div>
       </div>
     </div>
 
@@ -526,20 +550,18 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <small>Making a new link switches the old one off. The header never changes.</small>
         </div>
         <details class="guide" id="wGuide">
-          <summary>Set up the Shortcut (about 10 minutes, once)</summary>
+          <summary>Set up the Shortcut (about 5 minutes, once)</summary>
           <ol>
-            <li>Tap <b>Create Shortcut link</b> above. Keep this screen open: you'll copy the link and the header in step 7.</li>
-            <li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name it exactly <b>Cut Log Sync</b>.</li>
+            <li>Tap <b>Create Shortcut link</b> above and keep this screen open.</li>
+            <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a> (a new, empty Shortcut opens). Name it <b>Cut Log Sync</b>.</li>
             <li>Add <b>Find Health Samples</b>: Type <b>Workouts</b>, Start Date <b>is today</b>. Then add <b>Count</b>.</li>
-            <li>Add <b>Find Health Samples</b>: <b>Active Energy</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b>, set to <b>Sum</b>.</li>
-            <li>Do the same pair twice more: <b>Resting Energy</b> + Sum, and <b>Steps</b> + Sum.</li>
-            <li>Add <b>Find Health Samples</b>: <b>Weight</b>, Start Date <b>is today</b>, Sort by Start Date, <b>Latest First</b>, Limit <b>1</b>.</li>
-            <li>Add <b>Get Contents of URL</b> and paste your link. Tap the arrow to show more: Method <b>POST</b>. Under <b>Headers</b> add one: key <code>Authorization</code>, value = paste the header. Request Body <b>JSON</b>. Add five <b>Number</b> fields and fill each by tapping it and picking the matching result:
-              <code>workouts</code> = Count, <code>active_kcal</code> = Active Energy's Statistics, <code>resting_kcal</code> = Resting Energy's Statistics, <code>steps</code> = Steps' Statistics, <code>weight_kg</code> = the Weight Health Samples.</li>
-            <li>Add <b>Show Notification</b> and put <b>Contents of URL</b> in it.</li>
-            <li>Tap <b>▶</b>. Allow Health access when asked. You should see “Cut Log synced” with today's numbers.</li>
-            <li>Make it automatic: <b>Automation</b> tab, <b>+</b>, <b>Time of Day</b>, 23:55, Daily, <b>Run Immediately</b>, choose Cut Log Sync. Add a second one at 05:30 for night shifts. Running it more than once a day is fine, it just updates the day.</li>
+            <li>Add <b>Find Health Samples</b>: <b>Active Energy</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b> → <b>Sum</b>.</li>
+            <li>Add <b>Find Health Samples</b>: <b>Weight</b>, Start Date <b>is today</b>, <b>Latest First</b>, Limit <b>1</b>.</li>
+            <li>Add <b>Get Contents of URL</b>: paste the <b>link</b>. Tap the arrow: Method <b>POST</b>; Headers: <code>Authorization</code> = paste the <b>header</b>; Request Body <b>JSON</b> with three <b>Number</b> fields: <code>workouts</code> = Count, <code>active_kcal</code> = Statistics, <code>weight_kg</code> = Health Samples.</li>
+            <li>Tap <b>▶</b>. iPhone asks to access Health: tap <b>Allow</b>. You'll see today's numbers here within a minute.</li>
+            <li>Make it automatic: <b>Automation</b> tab → <b>+</b> → <b>Time of Day</b> 23:55 → Daily → <b>Run Immediately</b> → Cut Log Sync.</li>
           </ol>
+          <small>Optional extras, same way: <b>Resting Energy</b> + Sum as <code>resting_kcal</code>, and <b>Steps</b> + Sum as <code>steps</code>.</small>
           <small>If it says the key isn't valid, make a new link here and paste it into step 7. If it says “Missing authorization header”, check the header in step 7. If weight never arrives, let your scale's app write to Apple Health.</small>
         </details>
       </div>
@@ -592,7 +614,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg" id="toastMsg"></span><button type="button" id="toastUndo" hidden>Undo</button></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="app.js"></script>

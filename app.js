@@ -317,7 +317,7 @@
   function render() {
     last = compute();
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
-    renderWatchToday(); renderSafe();
+    renderWatchToday(); renderSafe(); renderSetup();
   }
   function renderWatchToday() {
     const lastW = watchLast(), r = rec(idOf(today)), h = r.health || {};
@@ -476,9 +476,9 @@
   function renderSettings() {
     const p = plan();
     SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k]; });
-    const cfg = !!Store.connected, u = Store.user;
-    $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || !!u; $('acctIn').hidden = !u;
-    if (u) $('aWho').textContent = u.email || 'you';
+    const cfg = !!Store.connected, u = Store.user, anon = Store.isAnonymous;
+    $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon;
+    if (u && !anon) $('aWho').textContent = u.email || 'you';
     renderWatch(); renderSafe();
     renderSync(); renderRem();
   }
@@ -506,7 +506,19 @@
   });
   $('aOut').addEventListener('click', async () => { await Store.signOut(); renderSettings(); toast('Signed out. Your data stays on this phone.'); });
   $('aSync').addEventListener('click', async () => { await Store.sync(); toast(Store.status === 'synced' ? 'Synced' : 'Sync didn’t finish, it will retry'); });
-  $('aUpload').addEventListener('click', async () => { await Store.firstSyncUploadAll(); toast(Store.status === 'synced' ? 'Everything uploaded' : 'Upload didn’t finish, it will retry'); });
+  let showSignIn = false;
+  $('lHave').addEventListener('click', () => { showSignIn = true; renderSettings(); $('aEmail').focus(); });
+  $('lSave').addEventListener('click', async () => {
+    const em = $('lEmail').value.trim(), pw = $('lPass').value;
+    if (!/^\S+@\S+\.\S+$/.test(em)) { $('lMsg').textContent = 'Enter your email.'; return; }
+    if (pw.length < 8) { $('lMsg').textContent = 'Use a password of at least 8 characters.'; return; }
+    try {
+      $('lMsg').textContent = 'Saving…';
+      const r = await Store.saveLogin(em, pw);
+      $('lMsg').textContent = r === 'done' ? 'Login saved. On a new phone, sign in with this email and password.' : 'Check your email and tap the link, then come back and tap Save my login once more to set the password.';
+      if (r === 'done') renderSettings();
+    } catch (e) { $('lMsg').textContent = e.message || 'Couldn’t save. Check you’re online.'; }
+  });
 
   // Apple Watch link
   let watchLink = '';
@@ -546,6 +558,34 @@
     $('watchStatus').textContent = lastW ? 'Last sync ' + ago(lastW) : 'Not connected';
     $('wRun').hidden = !lastW;
   }
+
+  // ---------- Home: Get set up ----------
+  let setupHidden = false; try { setupHidden = localStorage.getItem('cutlog-setup-hidden') === '1'; } catch (e) {}
+  let remOnCache = false;
+  async function renderSetup() {
+    if (!Store.connected) { $('setup').hidden = true; return; }
+    const sub = await currentSub(); remOnCache = !!sub && 'Notification' in window && Notification.permission === 'granted';
+    const items = [];
+    if (isIOS && !standalone()) items.push({ k: 'home', done: false, t: 'Add to your Home Screen', s: 'In Safari: Share, then Add to Home Screen. Open it from the icon.' });
+    items.push({ k: 'backup', done: !!Store.user, t: 'Back up', s: Store.user ? 'Backed up automatically' : 'Keep a copy safe in your private database', btn: 'Back up' });
+    items.push({ k: 'rem', done: remOnCache, t: 'Daily reminder', s: remOnCache ? 'On at ' + pad(remPrefs.hour) + ':00' : 'One tap, then Allow', btn: 'Turn on' });
+    items.push({ k: 'watch', done: !!watchLast(), t: 'Apple Watch', s: watchLast() ? 'Connected' : 'Free Shortcut, about 5 minutes', btn: 'Set up' });
+    const allDone = items.every(i => i.done);
+    $('setup').hidden = allDone || setupHidden;
+    $('setupList').innerHTML = items.map(i => '<li class="' + (i.done ? 'done' : '') + '"><div><b>' + esc(i.t) + '</b><span>' + esc(i.s) + '</span></div>' +
+      (i.done ? '<span class="tick" aria-label="Done">✓</span>' : i.btn ? '<button class="btn primary" type="button" data-setup="' + i.k + '">' + esc(i.btn) + '</button>' : '') + '</li>').join('');
+  }
+  $('setupList').addEventListener('click', e => {
+    const b = e.target.closest('[data-setup]'); if (!b) return;
+    const k = b.dataset.setup;
+    if (k === 'rem') {
+      if (!Store.user) { show('settings'); toast('Back up first, then reminders can switch on.'); return; }
+      if (isIOS && !standalone()) { toast('Add the app to your Home Screen first.'); return; }
+      turnOnReminders();
+    } else if (k === 'backup') { show('settings'); }
+    else if (k === 'watch') { show('settings'); setTimeout(() => { $('watchCard').scrollIntoView({ behavior: 'smooth' }); $('wGuide').open = true; }, 50); }
+  });
+  $('setupHide').addEventListener('click', () => { setupHidden = true; try { localStorage.setItem('cutlog-setup-hidden', '1'); } catch (e) {} $('setup').hidden = true; });
 
   // data safety
   function renderSafe() {
@@ -589,7 +629,7 @@
   const remMsg = t => { $('remMsg').textContent = t; };
   const vapidBytes = k => { const b = (k + '='.repeat((4 - k.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'); const r = atob(b); return Uint8Array.from(r, c => c.charCodeAt(0)); };
   (function fillHours() { const sel = $('remHour'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = pad(h) + ':00'; sel.appendChild(o); } })();
-  async function currentSub() { if (!pushOK()) return null; try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (e) { return null; } }
+  async function currentSub() { if (!pushOK()) return null; try { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 2000))]); return reg ? await reg.pushManager.getSubscription() : null; } catch (e) { return null; } }
   async function renderRem() {
     $('remHour').value = String(remPrefs.hour); setSeg($('segRem'), remPrefs);
     const u = Store.user;
@@ -608,7 +648,8 @@
   }
   $('remHour').addEventListener('change', () => { remPrefs.hour = Number($('remHour').value); saveRemLocal(); });
   $('segRem').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; remPrefs[b.dataset.v] = !remPrefs[b.dataset.v]; saveRemLocal(); setSeg($('segRem'), remPrefs); });
-  $('remOn').addEventListener('click', async () => {
+  $('remOn').addEventListener('click', () => turnOnReminders());
+  async function turnOnReminders() {
     try {
       remMsg('Asking for permission…');
       const perm = await Notification.requestPermission();
@@ -617,9 +658,9 @@
       let sub = await reg.pushManager.getSubscription();
       if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(await Store.vapidPublic()) });
       await Store.savePushSubscription(sub, remPrefs);
-      remMsg(''); toast('Reminders on at ' + pad(remPrefs.hour) + ':00'); renderRem();
-    } catch (e) { console.error(e); remMsg('Couldn’t turn reminders on. Check you’re online and signed in, then try again.'); }
-  });
+      remMsg(''); toast('Reminders on at ' + pad(remPrefs.hour) + ':00'); renderRem(); renderSetup();
+    } catch (e) { console.error(e); remMsg('Couldn’t turn reminders on. Check you’re online, then try again.'); toast('Couldn’t turn reminders on. Try again in Settings.'); }
+  }
   $('remTest').addEventListener('click', async () => {
     // A real push from the server, the same route the daily reminder takes.
     try { remMsg('Sending a test…'); const sub = await currentSub(); const r = await Store.testPush(sub && sub.endpoint); remMsg(r.result === 'sent' ? 'Sent. It should arrive in a few seconds.' : 'The push service said: ' + r.result); }
@@ -661,7 +702,7 @@
 
   // ---------- boot ----------
   setInterval(() => { const n = new Date(); if (idOf(n) !== idOf(today)) { today = n; render(); } }, 60000);
-  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); renderSafe(); if (!$('tab-settings').hidden) renderSettings(); } });
+  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); renderSafe(); renderSetup(); if (!$('tab-settings').hidden) renderSettings(); } });
 
   Store.init(PLAN_DEFAULT).then(() => {
     renderMode(); render(); renderSync();
