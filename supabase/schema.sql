@@ -94,8 +94,8 @@ begin
       if v !~ '^[0-9]+(\.[0-9]+)?$' then continue; end if;
       n := v::numeric;
     else continue; end if;
+    if n <= 0 and k <> 'workouts' then continue; end if; -- empty readings arrive as 0
     if k = 'weight_kg' then
-      if n = 0 then continue; end if;
       if n > 180 then n := n / 2.20462; elsif n < 30 then n := n * 6.35029; end if; -- sent in pounds or stones
       n := round(n, 1);
     end if;

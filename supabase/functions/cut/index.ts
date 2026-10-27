@@ -279,7 +279,10 @@ async function health(db, req, q) {
       if (!ns.length) continue;
       v = SUMS.includes(key) ? ns.reduce((a, b) => a + b, 0) : key === 'weight_kg' ? ns[ns.length - 1] : ns.reduce((a, b) => a + b, 0) / ns.length;
     }
-    if (v !== undefined && v !== null && v !== '') payload[key] = typeof v === 'number' ? v : String(v);
+    if (v === undefined || v === null || v === '') continue;
+    // Shortcuts sends an empty reading (nothing recorded yet today) as 0: treat it as missing
+    if (key !== 'workouts' && !(toNum(v) > 0)) continue;
+    payload[key] = typeof v === 'number' ? v : String(v);
   }
   let tz = q.get('tz') || 'Europe/London'; try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); } catch (e) { tz = 'Europe/London'; }
   const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || '') ? body.day : localNow(tz).id;
