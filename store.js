@@ -147,14 +147,17 @@
           }
           await saveOutbox();
           // push imported Apple Health history (merged into each day's health on the server)
+          // (kept separate: if this fails, the history stays queued on the phone and normal sync carries on)
           if (state.healthOutbox && state.healthOutbox.size) {
-            const ids = [...state.healthOutbox];
-            for (let i = 0; i < ids.length; i += 300) {
-              const rows = ids.slice(i, i + 300).filter(id => state.days[id] && state.days[id].health).map(id => ({ day: id, health: state.days[id].health }));
-              if (rows.length) { const { error } = await sb.rpc('health_import', { p_rows: rows }); if (error) throw error; }
-              ids.slice(i, i + 300).forEach(id => state.healthOutbox.delete(id));
-              await put('meta', 'healthOutbox', [...state.healthOutbox]);
-            }
+            try {
+              const ids = [...state.healthOutbox];
+              for (let i = 0; i < ids.length; i += 300) {
+                const rows = ids.slice(i, i + 300).filter(id => state.days[id] && state.days[id].health).map(id => ({ day: id, health: state.days[id].health }));
+                if (rows.length) { const { error } = await sb.rpc('health_import', { p_rows: rows }); if (error) throw error; }
+                ids.slice(i, i + 300).forEach(id => state.healthOutbox.delete(id));
+                await put('meta', 'healthOutbox', [...state.healthOutbox]);
+              }
+            } catch (e) { console.warn('history upload will retry', e); }
           }
           // pull days
           let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).limit(1000);
