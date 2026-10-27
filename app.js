@@ -511,7 +511,7 @@
   const authMsg = t => { $('aMsg').textContent = t; };
   const pkError = e => {
     const c = (e && (e.code || e.name || '')) + ' ' + (e && e.message || '');
-    if (/NotAllowed|AbortError|cancel/i.test(c)) return 'Cancelled.';
+    if (/NotAllowed|AbortError|cancel|not allowed|timed out/i.test(c)) return 'No Face ID for Cut Log on this phone yet, or it was cancelled. First time? Use the email link below once, then turn on Face ID.';
     if (/credential_not_found/.test(c)) return 'There’s no Cut Log passkey on this phone yet. Use the email link once, then turn on Face ID.';
     if (/passkey_disabled/.test(c)) return 'Face ID sign-in isn’t switched on for this app yet.';
     if (/credential_exists/.test(c)) return 'This phone’s Face ID is already set up for Cut Log.';
