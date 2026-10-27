@@ -1,0 +1,66 @@
+name: Build Cut Log Sync (iPhone app)
+# Builds the companion app on a free GitHub macOS machine and publishes an install file (.ipa)
+# at Releases -> cutlogsync-latest. AltStore signs it with your own Apple ID when you install it.
+on:
+  push:
+    branches: [main]
+    paths: ['companion/**', '.github/workflows/companion.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: companion, cancel-in-progress: true }
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate the Xcode project
+        working-directory: companion
+        run: |
+          brew install xcodegen >/dev/null
+          xcodegen generate
+      - name: Build (unsigned)
+        working-directory: companion
+        run: |
+          set -o pipefail
+          xcodebuild -version | tee -a build.log
+          xcodebuild -project CutLogSync.xcodeproj -scheme CutLogSync -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/CutLogSync.xcarchive archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee -a build.log | grep -E "error:|\*\* " || true
+          test -d build/CutLogSync.xcarchive/Products/Applications/CutLogSync.app
+      - name: Package the .ipa (declares the Apple Health entitlement)
+        working-directory: companion
+        run: |
+          set -euo pipefail
+          rm -rf Payload && mkdir Payload
+          cp -R build/CutLogSync.xcarchive/Products/Applications/CutLogSync.app Payload/
+          cat > ent.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>com.apple.developer.healthkit</key><true/></dict></plist>
+          PLIST
+          codesign -f -s - --entitlements ent.plist Payload/CutLogSync.app
+          zip -qry CutLogSync.ipa Payload
+          ls -l CutLogSync.ipa
+      - name: Publish to Releases
+        working-directory: companion
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete cutlogsync-latest --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create cutlogsync-latest CutLogSync.ipa --title "Cut Log Sync (iPhone app) ${GITHUB_SHA::7}" \
+            --notes "Install with AltStore (free Apple ID). Built from ${GITHUB_SHA::7}." --target "$GITHUB_SHA"
+      - name: Save the build log to the ci-logs branch
+        if: always()
+        run: |
+          mkdir -p /tmp/logs
+          tail -n 4000 companion/build.log > /tmp/logs/companion-build.log 2>/dev/null || echo "no build log" > /tmp/logs/companion-build.log
+          grep -E "error:" companion/build.log | sort -u | head -150 > /tmp/logs/companion-errors.txt 2>/dev/null || true
+          echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/logs/companion-status.txt
+          git config user.name "cut-log-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan ci-logs-tmp >/dev/null 2>&1
+          git rm -rfq . >/dev/null 2>&1 || true
+          cp /tmp/logs/* .
+          git add companion-build.log companion-errors.txt companion-status.txt
+          git commit -qm "companion build ${GITHUB_SHA::7}: ${{ job.status }}"
+          git push -qf origin HEAD:ci-logs

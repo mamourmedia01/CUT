@@ -2,6 +2,7 @@
 // Cut Log server: one Supabase Edge Function named "cut". Uses only Web Crypto and fetch.
 //
 //   POST ?action=health&k=KEY   the iPhone Shortcut sends today's Apple Watch numbers here
+//   POST ?action=push&k=KEY     the Cut Log Sync iPhone app sends whole days (live + history)
 //   POST ?action=run            hourly (GitHub Action): send each phone its daily reminder if due
 //   POST ?action=init           the public push key (the key pair is created on first use and kept
 //                               in a private table, so nothing ever has to be copied or pasted)
@@ -298,6 +299,22 @@ async function health(db, req, q) {
   return text('Cut Log synced ' + day + (bits.length ? ': ' + bits.join(', ') : ''));
 }
 
+// ---------- Cut Log Sync (iPhone app) ----------
+// POST ?action=push&k=KEY  body {rows:[{day:'YYYY-MM-DD', health:{...}}]}  -> merged into each day
+async function pushApp(db, req, q) {
+  const k = q.get('k') || '';
+  if (!k) return json({ error: 'missing key' }, 400);
+  let body; try { body = await req.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
+  const rows = Array.isArray(body && body.rows) ? body.rows.slice(0, 400) : [];
+  try {
+    const n = await db('rpc/health_push', { method: 'POST', body: JSON.stringify({ p_token: k, p_rows: rows }) });
+    return json({ ok: true, days: n });
+  } catch (e) {
+    if (/unknown token/.test(e.message)) return json({ error: 'unknown token' }, 401);
+    throw e;
+  }
+}
+
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, CORS) });
 
@@ -307,6 +324,7 @@ export async function handle(req, env) {
     const db = dbClient(env.url, env.key);
     const q = new URL(req.url).searchParams, action = q.get('action') || 'run';
     if (action === 'health') return await health(db, req, q);
+    if (action === 'push') return await pushApp(db, req, q);
     const keys = await getKeys(db);
     if (action === 'init') return json({ publicKey: keys.public_key });
     if (action === 'test') {

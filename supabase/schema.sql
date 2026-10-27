@@ -182,3 +182,44 @@ begin
 end $$;
 revoke all on function public.health_import(jsonb) from public, anon;
 grant execute on function public.health_import(jsonb) to authenticated;
+
+-- ---------- Cut Log Sync (iPhone companion app) ----------
+-- The app posts up to 400 days at once with the same personal key the Shortcut uses.
+-- Only known fields are kept; everything is merged into that day's `health`.
+create or replace function public.health_push(p_token text, p_rows jsonb)
+returns integer language plpgsql security definer set search_path = public, extensions as $$
+declare uid uuid; r jsonb; h jsonb; clean jsonb; k text; d date; n integer := 0;
+  nums text[] := array['workouts','workout_min','workout_kcal','active_kcal','resting_kcal','steps','exercise_min','distance_km',
+    'rhr','hrv_ms','resp_rate','spo2','vo2max','wrist_temp','weight_kg','body_fat','trimp','hr_max','hr_avg','hr_latest','hr_latest_ms',
+    'hr_minutes','sleep_h','sleep_deep_h','sleep_rem_h','sleep_core_h','sleep_awake_h','bed_ms','wake_ms'];
+begin
+  select user_id into uid from public.health_tokens where token_hash = encode(digest(coalesce(p_token, ''), 'sha256'), 'hex');
+  if uid is null then raise exception 'unknown token'; end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' or jsonb_array_length(p_rows) > 400 then raise exception 'bad rows'; end if;
+  for r in select value from jsonb_array_elements(p_rows) loop
+    begin d := (r->>'day')::date; exception when others then continue; end;
+    if d is null or d > current_date + 1 or d < current_date - 400 then continue; end if;
+    h := r->'health'; if jsonb_typeof(h) is distinct from 'object' then continue; end if;
+    clean := '{}'::jsonb;
+    foreach k in array nums loop
+      if jsonb_typeof(h->k) = 'number' then clean := clean || jsonb_build_object(k, h->k); end if;
+    end loop;
+    if jsonb_typeof(h->'hr_zones') = 'array' and jsonb_array_length(h->'hr_zones') = 5
+       and (select bool_and(jsonb_typeof(x) = 'number') from jsonb_array_elements(h->'hr_zones') x) then
+      clean := clean || jsonb_build_object('hr_zones', h->'hr_zones');
+    end if;
+    if jsonb_typeof(h->'workout_list') = 'array' and jsonb_array_length(h->'workout_list') <= 10 and octet_length((h->'workout_list')::text) < 4000 then
+      clean := clean || jsonb_build_object('workout_list', h->'workout_list');
+    end if;
+    if jsonb_typeof(h->'workout_types') = 'string' and length(h->>'workout_types') <= 300 then
+      clean := clean || jsonb_build_object('workout_types', h->'workout_types');
+    end if;
+    clean := clean || jsonb_build_object('synced_at', now(), 'source', 'app');
+    insert into public.days (user_id, day, health, updated_at) values (uid, d, clean, now())
+    on conflict (user_id, day) do update set health = coalesce(public.days.health, '{}'::jsonb) || excluded.health, updated_at = now();
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.health_push(text, jsonb) from public;
+grant execute on function public.health_push(text, jsonb) to anon, authenticated;
