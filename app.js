@@ -477,8 +477,18 @@
     const p = plan();
     SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k]; });
     const cfg = !!Store.connected, u = Store.user, anon = Store.isAnonymous;
-    $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon;
-    if (u && !anon) $('aWho').textContent = u.email || 'you';
+    $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon || showSignIn;
+    if (u && !anon) {
+      $('aWho').textContent = u.email || 'you';
+      const pk = Store.passkeys;
+      $('pkOffer').hidden = pk.length > 0; $('pkOn').hidden = !pk.length;
+      $('pkNames').textContent = pk.length ? ' (' + pk.map(x => x.friendly_name || x.friendlyName || 'passkey').join(', ') + ')' : '';
+    }
+    if (u && anon) {
+      const pending = u.new_email || (u.email && !u.email_confirmed_at ? u.email : '');
+      $('anonEmailStep').hidden = !!pending && !retypeEmail; $('anonPkStep').hidden = !pending || retypeEmail;
+      if (pending) $('anonPkText').textContent = 'We sent a link to ' + pending + '. Tap it, then come back here and tap Turn on Face ID.';
+    }
     renderWatch(); renderSafe();
     renderSync(); renderRem();
   }
@@ -499,26 +509,49 @@
     dot.dataset.s = s; dot.setAttribute('aria-label', text); dot.title = text; $('syncText').textContent = text;
   }
   const authMsg = t => { $('aMsg').textContent = t; };
-  $('aIn').addEventListener('click', async () => { try { authMsg('Signing in…'); await Store.signIn($('aEmail').value.trim(), $('aPass').value); authMsg(''); renderSettings(); toast('Signed in'); } catch (e) { authMsg(e.message || 'Couldn’t sign in.'); } });
-  $('aUp').addEventListener('click', async () => {
-    const pw = $('aPass').value; if (pw.length < 8) { authMsg('Use a password of at least 8 characters.'); return; }
-    try { authMsg('Creating account…'); const d = await Store.signUp($('aEmail').value.trim(), pw); authMsg(d && d.session ? '' : 'Check your email and tap the confirm link, then come back and sign in.'); renderSettings(); } catch (e) { authMsg(e.message || 'Couldn’t create the account.'); }
+  const pkError = e => {
+    const c = (e && (e.code || e.name || '')) + ' ' + (e && e.message || '');
+    if (/NotAllowed|AbortError|cancel/i.test(c)) return 'Cancelled.';
+    if (/credential_not_found/.test(c)) return 'There’s no Cut Log passkey on this phone yet. Use the email link once, then turn on Face ID.';
+    if (/passkey_disabled/.test(c)) return 'Face ID sign-in isn’t switched on for this app yet.';
+    if (/credential_exists/.test(c)) return 'This phone’s Face ID is already set up for Cut Log.';
+    if (/email_not_confirmed/.test(c)) return 'Confirm your email first: tap the link we sent.';
+    if (/anonymous|confirmed/i.test(c)) return 'Tap the link in your email first, then try again.';
+    return (e && e.message) || 'That didn’t work. Check you’re online and try again.';
+  };
+  const okEmail = v => /^\S+@\S+\.\S+$/.test(v);
+  $('pkIn').addEventListener('click', async () => {
+    try { authMsg('Waiting for Face ID…'); await Store.passkeySignIn(); authMsg(''); showSignIn = false; renderSettings(); toast('Signed in with Face ID'); }
+    catch (e) { authMsg(pkError(e)); }
+  });
+  $('aLink').addEventListener('click', async () => {
+    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
+    try { authMsg('Sending…'); await Store.emailLink(em); authMsg('Sent. Open the email on this phone and tap the link. Once you’re in, tap Turn on Face ID and you won’t need email again.'); }
+    catch (e) { authMsg(/rate|too many/i.test(e.message || '') ? 'Too many emails just now. Wait a few minutes and try again.' : (e.message || 'Couldn’t send. Check you’re online.')); }
+  });
+  let showSignIn = false, retypeEmail = false;
+  $('lHave').addEventListener('click', () => { showSignIn = true; renderSettings(); });
+  $('lRetype').addEventListener('click', () => { retypeEmail = true; renderSettings(); });
+  $('lSave').addEventListener('click', async () => {
+    const em = $('lEmail').value.trim(); if (!okEmail(em)) { $('lMsg').textContent = 'Enter your email.'; return; }
+    try { $('lMsg').textContent = 'Sending…'; await Store.emailLink(em); await Store.refreshUser(); retypeEmail = false; $('lMsg').textContent = ''; renderSettings(); }
+    catch (e) { $('lMsg').textContent = /rate|too many/i.test(e.message || '') ? 'Too many emails just now. Wait a few minutes and try again.' : (e.message || 'Couldn’t send. Check you’re online.'); }
+  });
+  $('lPk').addEventListener('click', async () => {
+    try {
+      $('lMsg').textContent = 'Checking your email is confirmed…';
+      await Store.refreshUser();
+      if (Store.isAnonymous) { $('lMsg').textContent = 'Not confirmed yet. Tap the link in the email first (check spam too).'; return; }
+      $('lMsg').textContent = 'Waiting for Face ID…';
+      await Store.passkeyAdd(); $('lMsg').textContent = ''; renderSettings(); renderSetup(); toast('Face ID sign-in is on');
+    } catch (e) { $('lMsg').textContent = pkError(e); }
+  });
+  $('pkAdd').addEventListener('click', async () => {
+    try { $('pkMsg').textContent = 'Waiting for Face ID…'; await Store.passkeyAdd(); $('pkMsg').textContent = ''; renderSettings(); renderSetup(); toast('Face ID sign-in is on'); }
+    catch (e) { $('pkMsg').textContent = pkError(e); }
   });
   $('aOut').addEventListener('click', async () => { await Store.signOut(); renderSettings(); toast('Signed out. Your data stays on this phone.'); });
   $('aSync').addEventListener('click', async () => { await Store.sync(); toast(Store.status === 'synced' ? 'Synced' : 'Sync didn’t finish, it will retry'); });
-  let showSignIn = false;
-  $('lHave').addEventListener('click', () => { showSignIn = true; renderSettings(); $('aEmail').focus(); });
-  $('lSave').addEventListener('click', async () => {
-    const em = $('lEmail').value.trim(), pw = $('lPass').value;
-    if (!/^\S+@\S+\.\S+$/.test(em)) { $('lMsg').textContent = 'Enter your email.'; return; }
-    if (pw.length < 8) { $('lMsg').textContent = 'Use a password of at least 8 characters.'; return; }
-    try {
-      $('lMsg').textContent = 'Saving…';
-      const r = await Store.saveLogin(em, pw);
-      $('lMsg').textContent = r === 'done' ? 'Login saved. On a new phone, sign in with this email and password.' : 'Check your email and tap the link, then come back and tap Save my login once more to set the password.';
-      if (r === 'done') renderSettings();
-    } catch (e) { $('lMsg').textContent = e.message || 'Couldn’t save. Check you’re online.'; }
-  });
 
   // Apple Watch link
   let watchLink = '';
@@ -568,6 +601,8 @@
     const items = [];
     if (isIOS && !standalone()) items.push({ k: 'home', done: false, t: 'Add to your Home Screen', s: 'In Safari: Share, then Add to Home Screen. Open it from the icon.' });
     items.push({ k: 'backup', done: !!Store.user, t: 'Back up', s: Store.user ? 'Backed up automatically' : 'Keep a copy safe in your private database', btn: 'Back up' });
+    const anon = Store.isAnonymous, hasPk = Store.passkeys.length > 0;
+    items.push({ k: 'pk', done: hasPk, t: 'Face ID sign-in', s: hasPk ? 'On: restore on any of your Apple devices' : (Store.user && !anon ? 'One tap, then Face ID' : 'Restore everything on a new phone'), btn: 'Turn on' });
     items.push({ k: 'rem', done: remOnCache, t: 'Daily reminder', s: remOnCache ? 'On at ' + pad(remPrefs.hour) + ':00' : 'One tap, then Allow', btn: 'Turn on' });
     items.push({ k: 'watch', done: !!watchLast(), t: 'Apple Watch', s: watchLast() ? 'Connected' : 'Free Shortcut, about 5 minutes', btn: 'Set up' });
     const allDone = items.every(i => i.done);
@@ -583,6 +618,10 @@
       if (isIOS && !standalone()) { toast('Add the app to your Home Screen first.'); return; }
       turnOnReminders();
     } else if (k === 'backup') { show('settings'); }
+    else if (k === 'pk') {
+      if (Store.user && !Store.isAnonymous) Store.passkeyAdd().then(() => { toast('Face ID sign-in is on'); renderSetup(); }).catch(err => toast(esc(pkError(err))));
+      else { show('settings'); setTimeout(() => { const f = Store.user ? $('lEmail') : $('aEmail'); if (f) f.focus(); }, 60); }
+    }
     else if (k === 'watch') { show('settings'); setTimeout(() => { $('watchCard').scrollIntoView({ behavior: 'smooth' }); $('wGuide').open = true; }, 50); }
   });
   $('setupHide').addEventListener('click', () => { setupHidden = true; try { localStorage.setItem('cutlog-setup-hidden', '1'); } catch (e) {} $('setup').hidden = true; });

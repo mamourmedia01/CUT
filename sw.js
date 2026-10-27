@@ -1,9 +1,9 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
-const VERSION = 'cutlog-v5';
+const VERSION = 'cutlog-v6';
 const SHELL = [
   './', './index.html', './app.js', './store.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js'
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js'
 ];
 
 self.addEventListener('install', e => {

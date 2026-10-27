@@ -69,7 +69,7 @@
       } catch (e) {}
       const cfg = window.CUT_CONFIG || {};
       if (cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase) {
-        sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+        sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, experimental: { passkey: true } } });
         const { data } = await sb.auth.getSession();
         user = data.session ? data.session.user : null;
         // No account yet: back up automatically with an anonymous account (if the project allows it).
@@ -177,28 +177,53 @@
     },
 
     // ---------- account ----------
-    async signIn(email, password) { if (!sb) throw new Error('Supabase is not connected yet.'); const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; },
-    async signUp(email, password) { if (!sb) throw new Error('Supabase is not connected yet.'); const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }); if (error) throw error; return data; },
     async signOut() { if (sb) await sb.auth.signOut(); user = null; await del('meta', 'lastPull'); state.lastPull = null; setStatus('signedout'); emit('auth'); },
     // First time on this phone with this account: upload everything already on the phone, then sync.
     async _onUser() {
       if (!user) return;
+      Store.refreshPasskeys();
       const done = await get('meta', 'uploadedFor');
       if (done !== user.id && Object.keys(state.days).length) { await Store.firstSyncUploadAll(); await put('meta', 'uploadedFor', user.id); }
       else { if (done !== user.id) await put('meta', 'uploadedFor', user.id); await Store.sync(); }
     },
     get isAnonymous() { return !!(user && (user.is_anonymous || (!user.email && !user.phone))); },
     get autoBackup() { return state.autoBackup; },
-    // Add an email + password to the automatic account, so it can be restored on another phone.
-    async saveLogin(email, password) {
+    // ---------- Face ID (passkeys) + email links, no passwords ----------
+    get passkeys() { return state.passkeys || []; },
+    async refreshPasskeys() {
+      state.passkeys = [];
+      if (!sb || !user || Store.isAnonymous) return [];
+      try { const { data } = await sb.auth.passkey.list(); state.passkeys = data || []; } catch (e) {}
+      emit('auth'); return state.passkeys;
+    },
+    async refreshUser() {
+      if (!sb || !user) return null;
+      const { data } = await sb.auth.getUser(); if (data && data.user) { user = data.user; emit('auth'); }
+      return user;
+    },
+    async passkeySignIn() {
+      if (!sb) throw new Error('Not connected yet.');
+      const { data, error } = await sb.auth.signInWithPasskey();
+      if (error) throw error;
+      return data;
+    },
+    async passkeyAdd() {
       if (!sb || !user) throw new Error('Not connected yet.');
-      const { data: g } = await sb.auth.getUser(); const u = g && g.user;
-      if (u && u.email && u.email_confirmed_at) {
-        const { error } = await sb.auth.updateUser({ password }); if (error) throw error; return 'done';
+      const { data, error } = await sb.auth.registerPasskey();
+      if (error) throw error;
+      await Store.refreshPasskeys();
+      return data;
+    },
+    // New or returning user: one-time sign-in link. Automatic (anonymous) account: confirm an email on it.
+    async emailLink(email) {
+      if (!sb) throw new Error('Not connected yet.');
+      const redirect = location.origin + location.pathname;
+      if (user && Store.isAnonymous) {
+        const { error } = await sb.auth.updateUser({ email }, { emailRedirectTo: redirect });
+        if (error) throw error; return 'confirm';
       }
-      if (u && u.email && !u.email_confirmed_at && u.email === email) return 'waiting';
-      const { error } = await sb.auth.updateUser({ email }, { emailRedirectTo: location.origin + location.pathname });
-      if (error) throw error; return 'sent';
+      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect, shouldCreateUser: true } });
+      if (error) throw error; return 'link';
     },
     async firstSyncUploadAll() { if (!sb || !user) return; Object.keys(state.days).forEach(id => state.outbox.add(id)); state.planDirty = true; await saveOutbox(); await Store.sync(); },
 

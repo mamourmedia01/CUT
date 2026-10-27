@@ -486,29 +486,36 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div id="acctOut">
         <p class="note" id="acctNoCfg">Sync isn't connected yet. Everything is saved on this phone and works offline.</p>
         <div id="acctForm" hidden>
-          <div class="fields" style="grid-template-columns:1fr 1fr">
-            <div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"></div>
-            <div class="field"><label class="label" for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password"></div>
-          </div>
-          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="aIn">Sign in</button><button class="btn" type="button" id="aUp">Create account</button></div>
+          <div class="btns"><button class="btn primary" type="button" id="pkIn">Sign in with Face ID</button></div>
+          <p class="note" style="margin-top:12px">New here, or no passkey on this phone yet? Get a one-time sign-in link by email. No password needed.</p>
+          <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email"></div></div>
+          <div class="btns" style="margin-top:10px"><button class="btn" type="button" id="aLink">Email me a sign-in link</button></div>
           <small id="aMsg"></small>
         </div>
       </div>
       <div id="acctAnon" hidden>
-        <p class="note"><b>Backed up automatically.</b> Everything you log is copied to your private database as you go. Nothing to sign up for.</p>
-        <details class="guide" id="anonMore">
-          <summary>Optional: add your email so you can restore on a new phone</summary>
-          <div class="fields" style="grid-template-columns:1fr 1fr">
-            <div class="field"><label class="label" for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="email"></div>
-            <div class="field"><label class="label" for="lPass">New password</label><input id="lPass" type="password" autocomplete="new-password"></div>
-          </div>
-          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="lSave">Save my login</button><button class="btn" type="button" id="lHave">I already have an account</button></div>
-          <small id="lMsg"></small>
-        </details>
+        <p class="note"><b>Backed up automatically.</b> Everything you log is copied to your private database as you go.</p>
+        <p class="note">Protect it with <b>Face ID</b> so you can get it all back on a new phone. Apple needs your email once to set this up.</p>
+        <div id="anonEmailStep">
+          <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="email" inputmode="email"></div></div>
+          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="lSave">Send confirmation link</button></div>
+        </div>
+        <div id="anonPkStep" hidden>
+          <p class="note" id="anonPkText">Tap the link in your email, then come back and tap below.</p>
+          <div class="btns"><button class="btn primary" type="button" id="lPk">Turn on Face ID</button><button class="btn" type="button" id="lRetype">Use a different email</button></div>
+        </div>
+        <div class="btns" style="margin-top:6px"><button class="linkbtn" type="button" id="lHave">I already have Face ID set up for Cut Log</button></div>
+        <small id="lMsg"></small>
       </div>
       <div id="acctIn" hidden>
         <p class="note">Signed in as <b id="aWho"></b>. Your days, settings and photos sync to your private database.</p>
+        <div id="pkOffer" hidden>
+          <p class="note"><b>Turn on Face ID sign-in.</b> Next time, on any of your Apple devices, you sign in with one glance.</p>
+          <div class="btns"><button class="btn primary" type="button" id="pkAdd">Turn on Face ID</button></div>
+        </div>
+        <p class="note" id="pkOn" hidden>Face ID sign-in is on<span id="pkNames"></span>.</p>
         <div class="btns"><button class="btn" type="button" id="aSync">Sync now</button><button class="btn danger" type="button" id="aOut">Sign out</button></div>
+        <small id="pkMsg"></small>
       </div>
     </div>
 
@@ -614,7 +621,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg" id="toastMsg"></span><button type="button" id="toastUndo" hidden>Undo</button></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="app.js"></script>
