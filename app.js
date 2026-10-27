@@ -368,6 +368,10 @@
       isCheat: id => (days()[id] || {}).mark === 'cheat', isDone: id => (days()[id] || {}).mark === 'done', sessions: id => sessOf(rec(id)),
       lastWatch: watchLast(), lastImport: lastImport(), morningSync: morningSync(), ago
     });
+    const th = (days()[idOf(today)] || {}).health || {};
+    const fresh = th.hr_latest != null && th.hr_latest_ms && Date.now() - th.hr_latest_ms < 60 * 60000;
+    $('bdLive').hidden = !fresh || bdSel !== idOf(today);
+    if (fresh) $('bdLive').innerHTML = esc(Math.round(th.hr_latest)) + ' bpm <span>heart rate, ' + esc(ago(new Date(th.hr_latest_ms).toISOString())) + '</span>';
   }
   const shiftDay = n => { const d = addDays(parseId(bdSel || idOf(today)), n); if (idOf(d) <= idOf(today)) { bdSel = idOf(d); renderBody(); } };
   $('bdPrev').addEventListener('click', () => shiftDay(-1));
@@ -382,6 +386,8 @@
     setTimeout(() => { const el = $(id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (id === 'watchCard') $('wGuide').open = true; }, 60);
   });
   $('openBody').addEventListener('click', () => show('body'));
+  // while Body is on screen, pull new watch data every 20 seconds
+  setInterval(() => { if (!$('tab-body').hidden && document.visibilityState === 'visible' && Store.user) Store.sync(); }, 20000);
   // tap a grey word in the Shortcut guide to copy it
   document.addEventListener('click', async e => {
     const k = e.target.closest('.key[data-copy]'); if (!k) return;
@@ -687,6 +693,17 @@
   $('wCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(watchLink); toast('Link copied'); }
     catch (e) { const r = document.createRange(); r.selectNodeContents($('wLink')); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast('Selected. Copy it from the menu.'); }
+  });
+  // Cut Log Sync (iPhone app): one tap creates a key and hands it to the app through its link
+  $('appConnect').addEventListener('click', async () => {
+    try {
+      $('appMsg').textContent = 'Connecting…';
+      const t = await Store.createHealthToken();
+      const c = window.CUT_CONFIG || {};
+      const push = c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/cut?action=push&k=' + encodeURIComponent(t);
+      $('appMsg').textContent = 'Opening Cut Log Sync… If nothing happens, install the app first (steps below). This also switches off any Shortcut link you made earlier.';
+      location.href = 'cutlogsync://setup?u=' + encodeURIComponent(push) + '&a=' + encodeURIComponent(c.SUPABASE_ANON_KEY);
+    } catch (e) { $('appMsg').textContent = 'Couldn’t connect: check you’re signed in and online.'; }
   });
   $('wCopyHead').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(Store.healthHeader()); toast('Header copied'); }

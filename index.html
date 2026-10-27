@@ -291,6 +291,12 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .key{font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 6px;cursor:pointer;min-height:28px}
 .key.copied{border-color:var(--done)}
 .keys{margin-top:6px;line-height:2.2}
+.appbox{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;margin-bottom:6px;display:grid;gap:8px}
+.live{display:flex;align-items:center;gap:8px;margin:-6px 4px 12px;font-weight:600}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cheat);animation:pulse 1.6s ease-in-out infinite}
+.live span{color:var(--muted);font-weight:500}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.live::before{animation:none}}
 .guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
@@ -579,6 +585,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="daynav"><button type="button" class="navbtn" id="bdPrev" aria-label="Previous day">‹</button><span id="bdDate">Today</span><button type="button" class="navbtn" id="bdNext" aria-label="Next day">›</button></div>
     </div>
     <div class="week" id="bdWeek" role="group" aria-label="This week"></div>
+    <p class="live" id="bdLive" hidden></p>
 
     <div id="bdEmpty" class="card" hidden>
       <h3 class="bh">Connect your watch</h3>
@@ -701,7 +708,28 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <p class="note">Apple only lets App Store apps read Apple Health, so a free iPhone Shortcut does it: each night it reads your watch's workouts, active and resting calories, steps and any weigh-in, and sends them here. What you type yourself always wins.</p>
       <div id="watchNeedsAcct"><small id="watchNeedsText">Sign in to sync first. The Shortcut sends data to your private database.</small></div>
       <div id="watchReady" hidden>
-        <div class="btns"><button class="btn primary" type="button" id="wToken">Create Shortcut link</button><a class="btn" id="wRun" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync" hidden>Sync watch now</a></div>
+        <div class="appbox">
+          <h4 class="gstep" style="margin-top:0">Cut Log Sync app (live)</h4>
+          <p class="note">A small free iPhone app that asks Apple Health for access once, then sends your watch data by itself: heart rate, steps, calories, exercise, HRV, sleep stages and workouts, every time new data arrives and every 30 seconds while it's open.</p>
+          <div class="btns"><button class="btn primary" type="button" id="appConnect">Connect iPhone app</button><a class="btn" id="appDownload" href="https://github.com/mamourmedia01/CUT/releases/download/cutlogsync-latest/CutLogSync.ipa">Download the app</a></div>
+          <small id="appMsg">Install the app first (steps below), then tap Connect iPhone app on your iPhone. It opens the app and fills everything in.</small>
+          <details class="guide" id="appGuide">
+            <summary>Install the app (once, about 15 minutes, needs your Mac)</summary>
+            <p class="note">Apple only lets App Store apps install directly, so you sign this one yourself with your own Apple ID using AltStore, which is free. AltStore refreshes it every 7 days by itself while your Mac is on the same Wi-Fi.</p>
+            <ol>
+              <li>On your Mac, download <b>AltServer</b> from <a href="https://altstore.io" target="_blank" rel="noopener">altstore.io</a> and open it. Its icon appears in the menu bar at the top.</li>
+              <li>Plug your iPhone into the Mac and tap <b>Trust</b> on the iPhone.</li>
+              <li>Click the AltServer icon → <b>Install AltStore</b> → your iPhone. Sign in with your Apple ID when AltServer asks.</li>
+              <li>On the iPhone: <b>Settings</b> → <b>General</b> → <b>VPN &amp; Device Management</b> → your Apple ID → <b>Trust</b>.</li>
+              <li>Still in Settings: <b>Privacy &amp; Security</b> → <b>Developer Mode</b> → turn it <b>On</b> and restart when asked.</li>
+              <li>On the iPhone, tap <b>Download the app</b> above. Then open <b>AltStore</b> → <b>My Apps</b> → <b>+</b> and pick <b>CutLogSync.ipa</b> from Downloads.</li>
+              <li>Come back here and tap <b>Connect iPhone app</b>. Cut Log Sync opens: tap <b>Allow Apple Health</b>, then <b>Turn On All</b> and <b>Allow</b>.</li>
+            </ol>
+            <small>If the app says Apple Health access isn't allowed for this app, your free Apple ID can't grant it: tell Claude, and the Shortcut below still works.</small>
+          </details>
+        </div>
+        <h4 class="gstep">Or use a Shortcut (no app)</h4>
+        <div class="btns"><button class="btn" type="button" id="wToken">Create Shortcut link</button><a class="btn" id="wRun" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync" hidden>Sync watch now</a></div>
         <div id="wOut" hidden class="field">
           <span class="label">1 · Your Shortcut link (shown once)</span><div class="token" id="wLink"></div>
           <div class="btns"><button class="btn primary" type="button" id="wCopy">Copy link</button></div>
