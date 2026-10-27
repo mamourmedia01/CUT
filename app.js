@@ -382,6 +382,12 @@
     setTimeout(() => { const el = $(id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (id === 'watchCard') $('wGuide').open = true; }, 60);
   });
   $('openBody').addEventListener('click', () => show('body'));
+  // tap a grey word in the Shortcut guide to copy it
+  document.addEventListener('click', async e => {
+    const k = e.target.closest('.key[data-copy]'); if (!k) return;
+    try { await navigator.clipboard.writeText(k.dataset.copy); k.classList.add('copied'); setTimeout(() => k.classList.remove('copied'), 1200); toast('Copied “' + esc(k.dataset.copy) + '”'); }
+    catch (err) { toast('Copy didn’t work here: type it instead.'); }
+  });
   let bhMetric = 'recovery', bhRange = 30;
   try { const j = JSON.parse(localStorage.getItem('cutlog-bh') || 'null'); if (j) { bhMetric = j.m || bhMetric; bhRange = j.r != null ? j.r : bhRange; } } catch (e) {}
   function renderBodyHist() {

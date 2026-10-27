@@ -287,6 +287,10 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .sources li div{display:grid}.sources li span{font-size:.85rem;color:var(--muted)}
 .sources .tick{color:var(--done);font-weight:800}
 @media (prefers-reduced-motion: no-preference){.dial path+path{transition:stroke-dasharray .5s ease-out}}
+.gstep{margin:14px 0 4px;font-family:var(--display);font-size:1.05rem;font-weight:800}
+.key{font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 6px;cursor:pointer;min-height:28px}
+.key.copied{border-color:var(--done)}
+.keys{margin-top:6px;line-height:2.2}
 .guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
@@ -706,21 +710,64 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <small>Making a new link switches the old one off. The header never changes.</small>
         </div>
         <details class="guide" id="wGuide">
-          <summary>Set up the Shortcut (about 6 minutes, once)</summary>
+          <summary>Set up the Shortcut, step by step (about 6 minutes, once)</summary>
+          <p class="note">Every word in <b>bold</b> is exactly what you'll see on screen. Tap any grey word in this guide to copy it.</p>
+
+          <h4 class="gstep">A. Start a new Shortcut</h4>
           <ol>
-            <li>Tap <b>Create Shortcut link</b> above and keep this screen open.</li>
-            <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a> (a new, empty Shortcut opens). Name it <b>Cut Log Sync</b>.</li>
-            <li>Add <b>Find Health Samples</b> → Type <b>Exercise Minutes</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b> → <b>Sum</b>. <small>(Shortcuts can't read workouts, so 20+ exercise minutes counts as a session and 90+ as a double.)</small></li>
-            <li>Same pair for <b>Active Energy</b> → <b>Sum</b>.</li>
-            <li>Add <b>Find Health Samples</b> → <b>Heart Rate Variability</b>, Start Date <b>is today</b>. Then <b>Calculate Statistics</b> → <b>Average</b>.</li>
-            <li>Same pair for <b>Resting Heart Rate</b> → <b>Average</b>.</li>
-            <li>Add <b>Find Health Samples</b> → <b>Weight</b>, Start Date <b>is today</b>, <b>Latest First</b>, Limit <b>1</b>.</li>
-            <li>Add <b>Get Contents of URL</b>: paste the <b>link</b>. Tap the arrow: Method <b>POST</b>; Headers: <code>Authorization</code> = paste the <b>header</b>; Request Body <b>JSON</b> with five <b>Number</b> fields, each set by tapping it and picking the matching result: <code>exercise_min</code>, <code>active_kcal</code>, <code>hrv_ms</code>, <code>rhr</code>, <code>weight_kg</code>.</li>
-            <li>Tap <b>▶</b>. iPhone asks to access Health: tap <b>Allow</b>. Your numbers show on Home within a minute.</li>
-            <li>Make it automatic: <b>Automation</b> tab → <b>+</b> → <b>Time of Day</b> → 23:55 → Daily → <b>Run Immediately</b> → Cut Log Sync. Add one at 09:00 too, so the morning's HRV gives you today's recovery.</li>
+            <li>Tap <b>Create Shortcut link</b> above. Keep this page open, you'll come back to copy the link and the header.</li>
+            <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a>. A blank Shortcut opens.</li>
+            <li>Tap the name at the top (<b>New Shortcut</b>), then <b>Rename</b>, type <button type="button" class="key" data-copy="Cut Log Sync">Cut Log Sync</button> and tap <b>Done</b>.</li>
           </ol>
-          <small>Optional extras, same way: <b>Steps</b> + Sum as <code>steps</code>, <b>Resting Energy</b> + Sum as <code>resting_kcal</code>, <b>Respiratory Rate</b> + Average as <code>resp_rate</code>. Sleep stages, real workouts and heart-rate strain come from <b>Apple Health history</b> below.</small>
-          <small>If it says the key isn't valid, make a new link here and paste it into step 7. If it says “Missing authorization header”, check the header in step 7. If weight never arrives, let your scale's app write to Apple Health.</small>
+
+          <h4 class="gstep">B. Add the first watch reading</h4>
+          <ol>
+            <li>Tap the search bar at the bottom, <b>Search for apps and actions</b>, and type <button type="button" class="key" data-copy="Find Health Samples">Find Health Samples</button>. Tap <b>Find Health Samples</b>.</li>
+            <li>It reads <b>Find All Health Samples where Type is …</b>. Tap the blue word after <b>Type is</b> and choose <b>Exercise Minutes</b>.</li>
+            <li>On the next line, tap the blue words after <b>Start Date</b> (for example <b>is in the last 7 days</b>) and choose <b>is today</b>.</li>
+            <li>Tap <b>Group By</b> and choose <b>Day</b>. If you don't see Group By, tap the small arrow on the action first. This gives one total for today, so there's nothing to add up.</li>
+          </ol>
+
+          <h4 class="gstep">C. Add the other four readings</h4>
+          <p class="note">Do section B again four times, choosing these after <b>Type is</b>. Keep them in this order:</p>
+          <ol>
+            <li><b>Active Energy</b></li>
+            <li><b>Heart Rate Variability</b></li>
+            <li><b>Resting Heart Rate</b></li>
+            <li><b>Weight</b></li>
+          </ol>
+          <p class="note">You now have five <b>Find Health Samples</b> actions, one under the other.</p>
+
+          <h4 class="gstep">D. Send them to Cut Log</h4>
+          <ol>
+            <li>Search <button type="button" class="key" data-copy="Get Contents of URL">Get Contents of URL</button> and tap it. It reads <b>Get contents of URL</b>.</li>
+            <li>Tap the blue word <b>URL</b> and paste your <b>link</b> (tap <b>Copy link</b> above first).</li>
+            <li>Tap the small arrow on the action to see more options.</li>
+            <li><b>Method</b>: tap <b>GET</b> and choose <b>POST</b>.</li>
+            <li><b>Headers</b>: tap <b>Add new header</b>. In <b>Key</b> type <button type="button" class="key" data-copy="Authorization">Authorization</button>. In <b>Text</b> paste your <b>header</b> (tap <b>Copy header</b> above first).</li>
+            <li><b>Request Body</b>: leave it on <b>JSON</b>. Tap <b>Add new field</b> and choose <b>Number</b>.</li>
+            <li>In <b>Key</b> type <button type="button" class="key" data-copy="exercise_min">exercise_min</button>. Tap the <b>Number</b> box next to it, tap <b>Select Variable</b>, then tap your <b>first</b> Find Health Samples action (Exercise Minutes). A blue <b>Health Samples</b> bubble appears.</li>
+            <li>Repeat <b>Add new field</b> → <b>Number</b> for the other four, in order:
+              <div class="keys"><button type="button" class="key" data-copy="active_kcal">active_kcal</button> → 2nd action &nbsp; <button type="button" class="key" data-copy="hrv_ms">hrv_ms</button> → 3rd &nbsp; <button type="button" class="key" data-copy="rhr">rhr</button> → 4th &nbsp; <button type="button" class="key" data-copy="weight_kg">weight_kg</button> → 5th</div></li>
+          </ol>
+
+          <h4 class="gstep">E. See it work</h4>
+          <ol>
+            <li>Search <button type="button" class="key" data-copy="Show Notification">Show Notification</button> and tap it. It fills in <b>Contents of URL</b> by itself.</li>
+            <li>Tap <b>▶</b> at the bottom right. When asked about Health, tap <b>Turn On All</b> (or the readings listed) and then <b>Allow</b>.</li>
+            <li>A notification says <b>Cut Log synced</b> with today's numbers. Tap <b>Done</b> at the top.</li>
+          </ol>
+
+          <h4 class="gstep">F. Make it run by itself</h4>
+          <p class="note">Your iPhone locks Health data while the screen is locked, so a timer at night often fails silently. Running it when you open an app you use every day is reliable.</p>
+          <ol>
+            <li>In Shortcuts, tap <b>Automation</b> at the bottom, then <b>+</b> (or <b>New Automation</b>).</li>
+            <li>Scroll to <b>App</b> and tap it. Tap <b>Choose</b>, pick an app you open first thing each morning (WhatsApp, Instagram, Mail) and tap <b>Done</b>.</li>
+            <li>Leave <b>Is Opened</b> ticked, choose <b>Run Immediately</b>, and tap <b>Next</b>.</li>
+            <li>Tap <b>Cut Log Sync</b>. Done: every time you open that app, today's numbers update.</li>
+          </ol>
+          <p class="note">Optional extras, added the same way as section B with <b>Group By</b> → <b>Day</b>, plus a field in section D: <b>Steps</b> as <button type="button" class="key" data-copy="steps">steps</button>, <b>Resting Energy</b> as <button type="button" class="key" data-copy="resting_kcal">resting_kcal</button>, <b>Respiratory Rate</b> as <button type="button" class="key" data-copy="resp_rate">resp_rate</button>.</p>
+          <small>If the notification says the key isn't valid, make a new link above and paste it again in section D. “Missing authorization header” means the header in section D is missing or incomplete. Sleep stages, real workouts and heart-rate strain come from <b>Apple Health history</b> below.</small>
         </details>
       </div>
     </div>

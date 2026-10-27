@@ -266,8 +266,20 @@ async function health(db, req, q) {
   const raw = req.method === 'POST' ? await req.text() : '';
   if (raw) { try { body = JSON.parse(raw); } catch (e) { body = Object.fromEntries(new URLSearchParams(raw)); } }
   for (const key of HEALTH_KEYS) if (body[key] == null && q.get(key) != null) body[key] = q.get(key);
+  // Shortcuts may send a value as a number, as text ("1,234 kcal"), or as a list of samples; turn each into one number.
+  const toNum = v => { if (typeof v === 'number') return v; const t = String(v).replace(/[^0-9.,-]/g, ''); const c = /,\d{3}(\D|$)/.test(t) && !/\.\d+$/.test(t.split(',').pop()) ? t.replace(/,/g, '') : (t.includes('.') ? t.replace(/,/g, '') : t.replace(',', '.')); const n = parseFloat(c); return isFinite(n) ? n : null; };
+  const SUMS = ['active_kcal', 'resting_kcal', 'steps', 'exercise_min', 'workouts', 'sleep_min'];
   const payload = {};
-  for (const key of HEALTH_KEYS) { const v = body[key]; if (v !== undefined && v !== null && v !== '') payload[key] = typeof v === 'number' ? v : String(v); }
+  for (const key of HEALTH_KEYS) {
+    let v = body[key];
+    if (typeof v === 'string' && /\n/.test(v.trim())) v = v.trim().split(/\n+/);       // several samples as lines of text
+    if (Array.isArray(v)) {
+      const ns = v.map(toNum).filter(n => n != null);
+      if (!ns.length) continue;
+      v = SUMS.includes(key) ? ns.reduce((a, b) => a + b, 0) : key === 'weight_kg' ? ns[ns.length - 1] : ns.reduce((a, b) => a + b, 0) / ns.length;
+    }
+    if (v !== undefined && v !== null && v !== '') payload[key] = typeof v === 'number' ? v : String(v);
+  }
   let tz = q.get('tz') || 'Europe/London'; try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); } catch (e) { tz = 'Europe/London'; }
   const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || '') ? body.day : localNow(tz).id;
   try {
@@ -276,13 +288,13 @@ async function health(db, req, q) {
     if (/unknown token/.test(e.message)) return text('That key isn’t valid any more. Make a new link in Cut Log → Settings → Apple Watch.', 401);
     throw e;
   }
-  const bits = [];
-  if (payload.workouts != null) bits.push(payload.workouts + ' workout' + (+payload.workouts === 1 ? '' : 's'));
-  if (payload.active_kcal != null) bits.push(Math.round(parseFloat(String(payload.active_kcal).replace(/,/g, ''))) + ' active kcal');
-  if (payload.exercise_min != null) bits.push(payload.exercise_min + ' exercise min');
-  if (payload.hrv_ms != null) bits.push('HRV ' + Math.round(parseFloat(String(payload.hrv_ms).replace(',', '.'))));
-  if (payload.rhr != null) bits.push('resting HR ' + Math.round(parseFloat(String(payload.rhr).replace(',', '.'))));
-  if (payload.steps != null) bits.push(payload.steps + ' steps');
+  const bits = [], N = k => payload[k] == null ? null : toNum(payload[k]);
+  if (N('exercise_min') != null) bits.push(Math.round(N('exercise_min')) + ' exercise min');
+  if (N('active_kcal') != null) bits.push(Math.round(N('active_kcal')) + ' active kcal');
+  if (N('hrv_ms') != null) bits.push('HRV ' + Math.round(N('hrv_ms')));
+  if (N('rhr') != null) bits.push('resting HR ' + Math.round(N('rhr')));
+  if (N('weight_kg') != null) bits.push(N('weight_kg') + ' kg');
+  if (N('steps') != null) bits.push(Math.round(N('steps')) + ' steps');
   return text('Cut Log synced ' + day + (bits.length ? ': ' + bits.join(', ') : ''));
 }
 
