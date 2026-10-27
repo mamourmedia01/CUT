@@ -217,6 +217,76 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .plot .tip span{color:var(--muted)}
 .guide-ol{margin:4px 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
 .bar.imp{margin-top:10px}
+/* ---------- Body tab ---------- */
+.body-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 2px 10px}
+.daynav{display:flex;align-items:center;gap:4px;font-weight:600}
+.daynav span{min-width:7.5em;text-align:center}
+.daynav button:disabled{opacity:.3}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:0 0 14px}
+.week button{font:inherit;display:grid;justify-items:center;gap:2px;padding:6px 0 8px;border-radius:var(--r-md);border:0;background:transparent;color:var(--muted);cursor:pointer;min-height:44px}
+.week button b{font-family:var(--display);font-size:1.15rem;color:var(--ink);font-weight:700}
+.week button span{font-size:.72rem}
+.week button i{width:9px;height:9px;border-radius:50%;box-sizing:border-box}
+.week button[aria-pressed="true"]{background:var(--surface)}
+.week button:disabled{opacity:.35}
+.hero{display:grid;grid-template-columns:1.55fr 1fr;align-items:center;gap:6px;margin-bottom:6px}
+.hero-main{display:grid;place-items:center}
+.hero-side{display:grid;gap:4px}
+.mini{all:unset;cursor:pointer;display:block;border-radius:var(--r-md)}
+.mini:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.dial{width:100%;height:auto;display:block}
+.dial .dv{font-family:var(--display);font-weight:800;fill:var(--ink);font-size:38px;font-variant-numeric:tabular-nums}
+.dial.big .dv{font-size:78px}
+.dial .du{font-size:.45em;font-weight:700;fill:var(--muted)}
+.dial .dc{font-family:var(--body);font-size:13px;fill:var(--muted);font-weight:600}
+.dial.big .dc{font-size:15px}
+.coach{font-size:1.08rem;line-height:1.45;margin:2px 4px 16px;max-width:60ch}
+.bsec{gap:10px}
+.bhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.bh{margin:0;font-family:var(--display);font-size:1.3rem;font-weight:800;letter-spacing:.01em}
+.bval{font-family:var(--display);font-size:1.3rem;font-weight:700;font-variant-numeric:tabular-nums}
+.bval.muted,.muted{color:var(--muted);font-family:var(--body);font-size:.85rem;font-weight:500}
+.sub{margin:4px 0 6px;font-size:.85rem;color:var(--muted)}
+.contrib{display:grid;gap:14px}
+.crow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:end}
+.cname{display:grid}.cname span{font-size:.82rem;color:var(--muted)}
+.cval{font-family:var(--display);font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums}
+.cval small,.wnum small,.tr small{font-family:var(--body);font-size:.75rem;font-weight:500;color:var(--muted)}
+.ctrack{grid-column:1/-1;position:relative;height:8px;border-radius:4px;background:var(--surface-2)}
+.ctrack .cmid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--line);transform:translateX(-1px)}
+.ctrack .cdot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--surface)}
+.tbar{position:relative;height:10px;border-radius:5px;background:var(--surface-2)}
+.tband{position:absolute;top:0;bottom:0;border-radius:5px;background:color-mix(in srgb,var(--blue) 35%,transparent)}
+.tnow{position:absolute;top:50%;width:4px;height:20px;border-radius:2px;background:var(--blue);transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--surface)}
+.tlab{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-top:4px}
+.stack{display:flex;gap:2px;height:14px;border-radius:7px;overflow:hidden}
+.stack i{display:block;min-width:3px}
+.sleg{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:.82rem;color:var(--muted)}
+.sleg span{display:inline-flex;align-items:center;gap:6px}
+.sleg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.wklist{list-style:none;margin:2px 0 0;padding:0;display:grid}
+.wklist li{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.wklist li div{display:grid}.wklist li span{font-size:.82rem;color:var(--muted)}
+.wnum{text-align:right;font-family:var(--display);font-size:1.15rem;font-weight:700;line-height:1.2}
+.kv{display:grid;gap:0}
+.kv div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+.kv div:first-child{border-top:0}
+.kv span{color:var(--muted)}.kv b{text-align:right;font-variant-numeric:tabular-nums}
+.trends{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tr{background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px;display:grid;gap:2px}
+.trn{font-size:.82rem;color:var(--muted)}
+.tr b{font-family:var(--display);font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.delta{font-size:.8rem;color:var(--muted);font-weight:600}
+.delta.good{color:var(--done)}.delta.bad{color:var(--cheat)}
+.spark{width:100%;height:26px;display:block;margin-top:4px}
+.insights{margin:0;padding-left:18px;display:grid;gap:10px;line-height:1.45}
+.insights li.muted{list-style:none;margin-left:-18px}
+.sources{list-style:none;margin:0;padding:0;display:grid}
+.sources li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.sources li:first-child{border-top:0}
+.sources li div{display:grid}.sources li span{font-size:.85rem;color:var(--muted)}
+.sources .tick{color:var(--done);font-weight:800}
+@media (prefers-reduced-motion: no-preference){.dial path+path{transition:stroke-dasharray .5s ease-out}}
 .guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
@@ -350,7 +420,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="rings" id="rings"></div>
       <p class="note" id="bodyNote" hidden></p>
       <div class="tiles3 tiles4" id="bodyTiles"></div>
-      <div class="btns"><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
+      <div class="btns"><button class="btn primary" type="button" id="openBody">Open Body</button><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
     </div>
 
     <div class="card">
@@ -494,12 +564,64 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         </table>
       </div>
     </div>
+  <div class="card"><div class="row"><span class="label">Badges</span><span class="label" id="badgeCount">0 / 12</span></div>
+    <div class="bgrid" id="bgrid"></div></div>
   </section>
 
-  <!-- BADGES -->
-  <section class="tab" id="tab-badges" aria-label="Badges" hidden>
-    <div class="tabhead"><h2>Badges</h2><span class="label" id="badgeCount">0 / 12</span></div>
-    <div class="card"><div class="bgrid" id="bgrid"></div></div>
+  <!-- BODY -->
+  <section class="tab" id="tab-body" aria-label="Body" hidden>
+    <div class="body-top">
+      <h2>Body</h2>
+      <div class="daynav"><button type="button" class="navbtn" id="bdPrev" aria-label="Previous day">‹</button><span id="bdDate">Today</span><button type="button" class="navbtn" id="bdNext" aria-label="Next day">›</button></div>
+    </div>
+    <div class="week" id="bdWeek" role="group" aria-label="This week"></div>
+
+    <div id="bdEmpty" class="card" hidden>
+      <h3 class="bh">Connect your watch</h3>
+      <p class="note">Your recovery, strain and sleep appear here once your Apple Watch data arrives. Two ways in, both free:</p>
+      <div class="btns"><button class="btn primary" type="button" data-goto="impCard">Import Apple Health history</button><button class="btn" type="button" data-goto="watchCard">Set up nightly sync</button></div>
+    </div>
+
+    <div id="bdMain">
+      <div class="hero" id="bdHero"></div>
+      <p class="coach" id="bdCoach"></p>
+
+      <div class="card bsec" id="bdRec">
+        <div class="bhead"><h3 class="bh">Recovery</h3><span class="bval" id="bdRecVal"></span></div>
+        <div class="contrib" id="bdContrib"></div>
+        <p class="note" id="bdRecNote"></p>
+      </div>
+
+      <div class="card bsec" id="bdStrain">
+        <div class="bhead"><h3 class="bh">Strain</h3><span class="bval" id="bdStrainVal"></span></div>
+        <div class="target" id="bdTarget"></div>
+        <div id="bdZones"></div>
+        <ul class="wklist" id="bdWk"></ul>
+        <p class="note" id="bdStrainNote"></p>
+      </div>
+
+      <div class="card bsec" id="bdSleep">
+        <div class="bhead"><h3 class="bh">Sleep</h3><span class="bval" id="bdSleepVal"></span></div>
+        <div id="bdStages"></div>
+        <div class="kv" id="bdSleepKv"></div>
+        <p class="note" id="bdSleepNote"></p>
+      </div>
+
+      <div class="card bsec">
+        <div class="bhead"><h3 class="bh">Last 7 days</h3><span class="bval muted">vs the week before</span></div>
+        <div class="trends" id="bdTrends"></div>
+      </div>
+
+      <div class="card bsec">
+        <h3 class="bh">What moves your body</h3>
+        <ul class="insights" id="bdInsights"></ul>
+      </div>
+
+      <div class="card bsec">
+        <h3 class="bh">Your data</h3>
+        <ul class="sources" id="bdSources"></ul>
+      </div>
+    </div>
   </section>
 
   <!-- SETTINGS -->
@@ -618,16 +740,19 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 
     <div class="card" id="remCard">
       <div class="row"><span class="label">Reminders</span><span class="label" id="remStatus">Off</span></div>
-      <p class="note">One nudge a day at the time you pick: tap the day in, protein day, and the Sunday waist check. Nothing is sent if there's nothing to do.</p>
+      <p class="note">An evening nudge to tap the day in, protein days and the Sunday waist check, plus a morning recovery score once your watch has synced. Nothing is sent if there's nothing to say.</p>
       <div id="remNeeds"><small id="remNeedsText">Sign in to sync first. Reminders are sent from your private database.</small></div>
       <div id="remReady" hidden>
         <div class="fields" style="grid-template-columns:1fr">
-          <div class="field"><label class="label" for="remHour">Remind me at</label><select id="remHour"></select></div>
+          <div class="field"><label class="label" for="remHour">Evening nudge at</label><select id="remHour"></select></div>
+          <div class="field"><label class="label" for="remMHour">Morning recovery from</label><select id="remMHour"></select></div>
         </div>
         <div class="seg" id="segRem" style="margin-top:10px">
           <button type="button" data-v="log" aria-pressed="true">Log the day</button>
           <button type="button" data-v="protein" aria-pressed="true">Protein day</button>
           <button type="button" data-v="waist" aria-pressed="true">Sunday waist</button>
+          <button type="button" data-v="morning" aria-pressed="true">Morning recovery</button>
+          <button type="button" data-v="history" aria-pressed="true">Weekly Health refresh</button>
         </div>
         <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="remOn">Turn on reminders</button><button class="btn" type="button" id="remTest" hidden>Test on this phone</button><button class="btn danger" type="button" id="remOff" hidden>Turn off</button></div>
         <small id="remMsg"></small>
@@ -657,7 +782,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     <button type="button" role="tab" data-go="home" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
     <button type="button" role="tab" data-go="log" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 14.5l2.5 2.5 4.5-4.5"/></svg>Log</button>
     <button type="button" role="tab" data-go="stats" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>Stats</button>
-    <button type="button" role="tab" data-go="badges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>Badges</button>
+    <button type="button" role="tab" data-go="body" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>Body</button>
     <button type="button" role="tab" data-go="settings" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
   </div>
 </nav>
@@ -667,6 +792,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="health.js"></script>
+<script src="body.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

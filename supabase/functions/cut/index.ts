@@ -90,7 +90,7 @@ export function streak(plan, days, todayId) {
   for (let n = toN(todayId) - 1; n >= toN(plan.start); n--) { if ((days[toId(n)] || {}).mark === 'done') run++; else break; }
   return run;
 }
-export function compose(planIn, days, prefs, now) {
+export function compose(planIn, days, prefs, now, lastImport) {
   const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), p = prefs || {}, today = days[now.id] || {};
   const lines = []; let title = 'Cut Log';
   const prot = p.protein !== false && proteinDue(plan, days, now.id);
@@ -103,7 +103,93 @@ export function compose(planIn, days, prefs, now) {
     lines.push(run ? 'Tap today in to make it ' + (run + 1) + '. ' + (toBoss === 1 ? 'Boss falls today.' : toBoss + ' to the boss.') : 'Tap today in and start the run.');
   }
   if (waist) { if (!prot && !needLog) title = 'Sunday check'; lines.push('Measure your waist for +50 XP.'); }
+  // Sundays: nudge to refresh the Apple Health history if it's over a week old (sleep stages + heart-rate strain)
+  if (p.history !== false && now.sunday && (!lastImport || Date.now() - Date.parse(lastImport) > 8 * 864e5)) {
+    if (!lines.length) title = 'Weekly refresh';
+    lines.push('Refresh your Apple Health history for sleep stages and heart-rate strain: Health app, Export, then Cut Log Settings.');
+  }
   return lines.length ? { title, body: lines.join(' '), url: APP_PATH } : null;
+}
+
+// ---------- recovery (same maths as health.js in the app; keep the two in step) ----------
+const BASE_W = 60, BASE_MIN = 7;
+const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / Math.max(1, a.length - 1)); };
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const num = v => typeof v === 'number' && isFinite(v) ? v : null;
+const dayN = id => Date.UTC(+id.slice(0, 4), +id.slice(5, 7) - 1, +id.slice(8, 10)) / 864e5;
+
+function strainOf(h) {
+  if (!h) return null;
+  if (num(h.trimp) != null) return { v: 21 * (1 - Math.exp(-h.trimp / 250)), est: false };
+  const ex = num(h.exercise_min), st = num(h.steps), wm = num(h.workout_min);
+  if (ex == null && st == null && wm == null) return null;
+  const t = (ex != null ? ex : (wm || 0)) * 2.6 + (st || 0) / 120;
+  return { v: 21 * (1 - Math.exp(-t / 250)), est: true };
+}
+
+// scores for every day that has Apple Health data; days = Store.days
+function compute(days) {
+  const ids = Object.keys(days).filter(id => days[id] && days[id].health).sort();
+  const out = {};
+  const hist = { hrv: [], rhr: [], resp: [], temp: [], sleep: [] }; // [dayN, value]
+  let prevStrain = null, prevN = null;
+  for (const id of ids) {
+    const h = days[id].health, n = dayN(id), o = {};
+    const s = strainOf(h); if (s) { o.strain = Math.round(s.v * 10) / 10; o.strainEst = s.est; }
+    const need = 8 + (prevStrain != null && prevN === n - 1 ? Math.max(0, prevStrain - 10) * 0.06 : 0);
+    if (num(h.sleep_h) != null) { o.sleep = h.sleep_h; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, h.sleep_h / need)); }
+    // baselines from the previous 60 days only
+    ['hrv', 'rhr', 'resp', 'temp'].forEach(k => { hist[k] = hist[k].filter(p => p[0] >= n - BASE_W && p[0] < n); });
+    hist.sleep = hist.sleep.filter(p => p[0] >= n - 7 && p[0] < n);
+    const hrv = num(h.hrv_ms), rhr = num(h.rhr);
+    const parts = [];
+    if (hrv != null && hrv > 0 && hist.hrv.length >= BASE_MIN) {
+      const a = hist.hrv.map(p => Math.log(p[1])); const z = (Math.log(hrv) - mean(a)) / Math.max(sd(a), 0.08);
+      parts.push([0.5, z]); o.hrvNorm = Math.round(Math.exp(mean(a))); o.hrvZ = z;
+    }
+    if (rhr != null && hist.rhr.length >= BASE_MIN) {
+      const a = hist.rhr.map(p => p[1]); const z = -(rhr - mean(a)) / Math.max(sd(a), 2);
+      parts.push([0.25, z]); o.rhrNorm = Math.round(mean(a)); o.rhrZ = z;
+    }
+    if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, h.sleep_h / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
+    // not scored, but flagged: breathing rate and wrist temperature well above your normal often mean illness or poor recovery
+    const resp = num(h.resp_rate), temp = num(h.wrist_temp);
+    if (resp != null && hist.resp.length >= BASE_MIN) { const a = hist.resp.map(p => p[1]); o.respNorm = Math.round(mean(a) * 10) / 10; o.respHigh = resp > mean(a) + Math.max(1, 2 * sd(a)); }
+    if (temp != null && hist.temp.length >= BASE_MIN) { const a = hist.temp.map(p => p[1]); o.tempDev = Math.round((temp - mean(a)) * 10) / 10; }
+    if (o.sleepPerf != null) { o.debt = Math.round(hist.sleep.reduce((t, p) => t + Math.max(0, p[1]), 0) * 10) / 10; }
+    if (parts.length && hrv != null && hist.hrv.length >= BASE_MIN) {
+      const w = parts.reduce((s, p) => s + p[0], 0), z = clamp(parts.reduce((s, p) => s + p[0] * p[1], 0) / w, -2.5, 2.5);
+      o.recovery = Math.round(clamp(60 + 20 * z, 1, 99));
+    } else if (hrv != null) o.calibrating = hist.hrv.length;
+    o.hrv = hrv; o.rhr = rhr;
+    if (hrv != null && hrv > 0) hist.hrv.push([n, hrv]);
+    if (rhr != null) hist.rhr.push([n, rhr]);
+    if (resp != null) hist.resp.push([n, resp]);
+    if (temp != null) hist.temp.push([n, temp]);
+    if (o.sleep != null) hist.sleep.push([n, need - o.sleep]);
+    if (o.strain != null) { prevStrain = o.strain; prevN = n; }
+    out[id] = o;
+  }
+  return out;
+}
+
+
+function coachLine(r) {
+  if (r >= 67) return { lo: 14, hi: 18, t: 'a heavy session or a double fits.' };
+  if (r >= 34) return { lo: 10, hi: 14, t: 'train, but keep it controlled.' };
+  return { lo: 0, hi: 10, t: 'rest, walk, and hit your protein.' };
+}
+export function morningMsg(healthDays, todayId) {
+  const wrapped = {}; for (const id in healthDays) wrapped[id] = { health: healthDays[id] };
+  const sc = compute(wrapped)[todayId];
+  if (!sc || sc.recovery == null) return null;
+  const r = sc.recovery, band = r >= 67 ? 'green' : r >= 34 ? 'amber' : 'red', c = coachLine(r);
+  const bits = [];
+  if (sc.hrv != null) bits.push('HRV ' + Math.round(sc.hrv) + (sc.hrvNorm ? ' (normal ' + sc.hrvNorm + ')' : ''));
+  if (sc.rhr != null) bits.push('resting HR ' + Math.round(sc.rhr));
+  if (sc.sleep != null) bits.push(sc.sleep.toFixed(1) + ' h sleep');
+  return { title: 'Recovery ' + r + '%, ' + band, body: (bits.length ? bits.join(', ') + '. ' : '') + 'Strain target ' + c.lo + '–' + c.hi + ': ' + c.t, url: './#body' };
 }
 
 // ---------- database (service role, injected by Supabase) ----------
@@ -134,18 +220,33 @@ async function send(db, keys, sub, msg) {
 }
 
 async function run(db, keys) {
-  const subs = await db('push_subs?select=endpoint,user_id,sub,prefs,tz,last_sent');
+  const subs = await db('push_subs?select=endpoint,user_id,sub,prefs,tz,last_sent,last_morning');
   if (!subs.length) return { phones: 0, sent: 0 };
   const since = toId(Math.floor(Date.now() / 86400000) - 120);
-  const [settings, dayRows] = await Promise.all([db('settings?select=user_id,data'), db('days?select=user_id,day,data&day=gte.' + since)]);
-  const plans = {}, days = {};
+  const [settings, dayRows] = await Promise.all([db('settings?select=user_id,data'), db('days?select=user_id,day,data,health&day=gte.' + since)]);
+  const plans = {}, days = {}, health = {}, lastImport = {};
   settings.forEach(s => { plans[s.user_id] = s.data; });
-  dayRows.forEach(d => { (days[d.user_id] = days[d.user_id] || {})[d.day] = d.data || {}; });
+  dayRows.forEach(d => {
+    (days[d.user_id] = days[d.user_id] || {})[d.day] = d.data || {};
+    if (d.health) { (health[d.user_id] = health[d.user_id] || {})[d.day] = d.health; const t = d.health.imported_at; if (t && (!lastImport[d.user_id] || t > lastImport[d.user_id])) lastImport[d.user_id] = t; }
+  });
   const out = [];
   for (const s of subs) {
-    const now = localNow(s.tz || 'Europe/London'), hour = s.prefs && s.prefs.hour != null ? +s.prefs.hour : 20;
+    const now = localNow(s.tz || 'Europe/London'), p = s.prefs || {};
+    // morning recovery briefing: once a day, as soon as today's HRV has arrived (window: chosen hour + 3)
+    const mh = p.mhour != null ? +p.mhour : 8;
+    if (p.morning !== false && s.last_morning !== now.id && now.hour >= mh && now.hour <= mh + 3) {
+      const hd = health[s.user_id] || {};
+      const msg = hd[now.id] && hd[now.id].hrv_ms != null ? morningMsg(hd, now.id) : null;
+      if (msg) {
+        const res = await send(db, keys, s, msg);
+        if (res !== 'expired' && !res.startsWith('failed')) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_morning: now.id }) });
+        out.push('morning ' + res);
+      }
+    }
+    const hour = p.hour != null ? +p.hour : 20;
     if (s.last_sent === now.id || now.hour < hour || now.hour > hour + 3) continue; // once a day, in a 4-hour window (GitHub cron can run late)
-    const msg = compose(plans[s.user_id], days[s.user_id] || {}, s.prefs, now);
+    const msg = compose(plans[s.user_id], days[s.user_id] || {}, s.prefs, now, lastImport[s.user_id]);
     const res = msg ? await send(db, keys, s, msg) : 'nothing due';
     if (res !== 'expired' && !res.startsWith('failed')) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_sent: now.id }) });
     out.push(res);

@@ -268,7 +268,7 @@
       const entries = [];
       for (const r of rows) {
         const cur = state.days[r.day] || {};
-        const rec = Object.assign({}, cur, { health: Object.assign({}, cur.health || {}, r.health) });
+        const rec = Object.assign({}, cur, { health: Object.assign({}, cur.health || {}, r.health, { imported_at: new Date().toISOString() }) });
         state.days[r.day] = rec; entries.push([r.day, rec]);
         state.healthOutbox.add(r.day);
       }

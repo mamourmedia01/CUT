@@ -17,7 +17,8 @@ const AVG = { // per-day averages
   HKQuantityTypeIdentifierHeartRateVariabilitySDNN: 'hrv_ms',
   HKQuantityTypeIdentifierRespiratoryRate: 'resp_rate',
   HKQuantityTypeIdentifierOxygenSaturation: 'spo2',
-  HKQuantityTypeIdentifierVO2Max: 'vo2max'
+  HKQuantityTypeIdentifierVO2Max: 'vo2max',
+  HKQuantityTypeIdentifierAppleSleepingWristTemperature: 'wrist_temp'
 };
 const LAST = { HKQuantityTypeIdentifierBodyMass: 'weight_kg', HKQuantityTypeIdentifierBodyFatPercentage: 'body_fat' };
 const HR = 'HKQuantityTypeIdentifierHeartRate';
@@ -32,7 +33,7 @@ const days = new Map();              // 'YYYY-MM-DD' -> accumulator
 const hrPrev = new Map();            // source -> { t, bpm, day }
 let dob = null, records = 0, workouts = 0, firstDay = null, lastDay = null, allHrMax = [];
 
-const D = id => { let d = days.get(id); if (!d) { d = { sum: {}, avg: {}, last: {}, hr: {}, sleep: {}, wk: { n: 0, min: 0, kcal: 0, types: {} } }; days.set(id, d); } return d; };
+const D = id => { let d = days.get(id); if (!d) { d = { sum: {}, avg: {}, last: {}, hr: {}, sleep: {}, wk: { n: 0, min: 0, kcal: 0, types: {}, list: [] } }; days.set(id, d); } return d; };
 const toMs = s => Date.parse(s.slice(0, 10) + 'T' + s.slice(11, 19) + (s.length > 20 ? s.slice(20, 23) + ':' + s.slice(23, 25) : 'Z'));
 const dayOf = s => s.slice(0, 10);
 function attrs(tag) { const o = {}; const re = /(\w+)="([^"]*)"/g; let m; while ((m = re.exec(tag))) o[m[1]] = m[2]; return o; }
@@ -51,11 +52,11 @@ function onRecord(a) {
   const type = a.type; if (!type || !a.startDate) return;
   records++;
   if (type === SLEEP) {
-    const stage = STAGE[a.value]; if (!stage || stage === 'awake') return;
+    const stage = STAGE[a.value]; if (!stage) return;
     const id = dayOf(a.endDate || a.startDate); seen(id);   // a night belongs to the morning you wake up
     const sec = Math.max(0, (toMs(a.endDate) - toMs(a.startDate)) / 1000); if (!(sec > 0 && sec < 16 * 3600)) return;
-    const src = a.sourceName || '?', sl = D(id).sleep; const s = sl[src] || (sl[src] = { deep: 0, rem: 0, core: 0, asleep: 0, start: Infinity, end: 0 });
-    s[stage] += sec; s.start = Math.min(s.start, toMs(a.startDate)); s.end = Math.max(s.end, toMs(a.endDate));
+    const src = a.sourceName || '?', sl = D(id).sleep; const s = sl[src] || (sl[src] = { deep: 0, rem: 0, core: 0, asleep: 0, awake: 0, start: Infinity, end: 0 });
+    s[stage] += sec; if (stage !== 'awake') { s.start = Math.min(s.start, toMs(a.startDate)); s.end = Math.max(s.end, toMs(a.endDate)); }
     return;
   }
   const v0 = parseFloat(a.value); if (!isFinite(v0)) return;
@@ -82,11 +83,13 @@ function onWorkout(a) {
   d.wk.min += min;
   const kcal = parseFloat(a.totalEnergyBurned); if (isFinite(kcal)) d.wk.kcal += a.totalEnergyBurnedUnit === 'kJ' ? kcal / 4.184 : kcal;
   const t = (a.workoutActivityType || '').replace('HKWorkoutActivityType', ''); d.wk.types[t] = (d.wk.types[t] || 0) + 1;
-  curWk = { d, hadKcal: isFinite(kcal) };
+  const item = { t, s: a.startDate.slice(11, 16), e: (a.endDate || '').slice(11, 16), min: Math.round(min), kcal: isFinite(kcal) ? Math.round(a.totalEnergyBurnedUnit === 'kJ' ? kcal / 4.184 : kcal) : null };
+  if (d.wk.list.length < 6) d.wk.list.push(item);
+  curWk = { d, hadKcal: isFinite(kcal), item };
 }
 function onWorkoutStat(a) { // newer exports put energy here instead of on <Workout>
   if (!curWk || curWk.hadKcal || a.type !== 'HKQuantityTypeIdentifierActiveEnergyBurned') return;
-  const v = parseFloat(a.sum); if (isFinite(v)) curWk.d.wk.kcal += a.unit === 'kJ' ? v / 4.184 : v;
+  const v = parseFloat(a.sum); if (isFinite(v)) { const k = a.unit === 'kJ' ? v / 4.184 : v; curWk.d.wk.kcal += k; if (curWk.item) curWk.item.kcal = Math.round((curWk.item.kcal || 0) + k); }
 }
 
 // ---------- streaming XML scan ----------
@@ -125,15 +128,15 @@ function finish() {
     // heart rate: pick the source with the most coverage, then Edwards TRIMP (minutes in each %HRmax zone x zone number)
     let best = null; for (const s in d.hr) if (!best || d.hr[s].secs > best.secs) best = d.hr[s];
     if (best && best.secs > 0) {
-      let trimp = 0;
-      for (const b in best.bins) { const bpm = b * 5 + 2.5, pct = bpm / hrMax, z = pct >= 0.9 ? 5 : pct >= 0.8 ? 4 : pct >= 0.7 ? 3 : pct >= 0.6 ? 2 : pct >= 0.5 ? 1 : 0; trimp += (best.bins[b] / 60) * z; }
-      h.trimp = Math.round(trimp); h.hr_max = Math.round(best.max); h.hr_minutes = Math.round(best.secs / 60);
+      let trimp = 0; const zm = [0, 0, 0, 0, 0];
+      for (const b in best.bins) { const bpm = b * 5 + 2.5, pct = bpm / hrMax, z = pct >= 0.9 ? 5 : pct >= 0.8 ? 4 : pct >= 0.7 ? 3 : pct >= 0.6 ? 2 : pct >= 0.5 ? 1 : 0; trimp += (best.bins[b] / 60) * z; if (z) zm[z - 1] += best.bins[b] / 60; }
+      h.trimp = Math.round(trimp); h.hr_zones = zm.map(m => Math.round(m)); h.hr_max = Math.round(best.max); h.hr_minutes = Math.round(best.secs / 60);
     }
     // sleep: the source with the most sleep (usually the Watch)
     // prefer a source that records sleep stages (the Watch) over a bedtime estimate; then the longest
     let sb = null; for (const s in d.sleep) { const x = d.sleep[s], tot = x.deep + x.rem + x.core + x.asleep, st = x.deep + x.rem + x.core > 0 ? 1 : 0; if (!sb || st > sb.st || (st === sb.st && tot > sb.tot)) sb = Object.assign({ tot, st }, x); }
-    if (sb && sb.tot > 1800) { h.sleep_h = sb.tot / 3600; if (sb.deep + sb.rem + sb.core > 0) { h.sleep_deep_h = sb.deep / 3600; h.sleep_rem_h = sb.rem / 3600; h.sleep_core_h = (sb.core + sb.asleep) / 3600; } h.bed_ms = sb.start; h.wake_ms = sb.end; }
-    if (d.wk.n) { h.workouts = d.wk.n; h.workout_min = d.wk.min; if (d.wk.kcal) h.workout_kcal = d.wk.kcal; h.workout_types = Object.keys(d.wk.types).join(','); }
+    if (sb && sb.tot > 1800) { h.sleep_h = sb.tot / 3600; if (sb.deep + sb.rem + sb.core > 0) { h.sleep_deep_h = sb.deep / 3600; h.sleep_rem_h = sb.rem / 3600; h.sleep_core_h = (sb.core + sb.asleep) / 3600; } h.bed_ms = sb.start; h.wake_ms = sb.end; if (sb.awake) h.sleep_awake_h = sb.awake / 3600; }
+    if (d.wk.n) { h.workouts = d.wk.n; h.workout_min = d.wk.min; if (d.wk.kcal) h.workout_kcal = d.wk.kcal; h.workout_types = Object.keys(d.wk.types).join(','); h.workout_list = d.wk.list; }
     for (const k in h) if (typeof h[k] === 'number') h[k] = ['steps', 'workouts', 'trimp', 'hr_max', 'hr_minutes', 'bed_ms', 'wake_ms'].includes(k) ? Math.round(h[k]) : k === 'active_kcal' || k === 'resting_kcal' || k === 'workout_kcal' || k === 'exercise_min' || k === 'workout_min' ? Math.round(h[k]) : (k.startsWith('sleep') ? Math.round(h[k] * 100) / 100 : r1(h[k]));
     if (Object.keys(h).length) out.push({ day: id, health: h });
   }

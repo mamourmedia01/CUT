@@ -322,7 +322,7 @@
   function render() {
     last = compute();
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
-    renderWatchToday(); renderSafe(); renderSetup();
+    renderWatchToday(); renderSafe(); renderSetup(); renderBody();
   }
   // ---------- Body today (Whoop-style) + history ----------
   let bodyScores = {};
@@ -352,6 +352,36 @@
       t(h.steps != null ? kfmt(h.steps) : '–', 'steps') +
       t(h.active_kcal != null ? kfmt(h.active_kcal) : '–', 'active kcal');
   }
+  // ---------- Body tab ----------
+  let bdSel = null;
+  function latestHealthDay() { const ids = Object.keys(days()).filter(id => days()[id] && days()[id].health && id <= idOf(today)).sort(); return ids.length ? ids[ids.length - 1] : idOf(today); }
+  function lastImport() { let b = null; for (const r of Object.values(days())) { const t = r && r.health && r.health.imported_at; if (t && (!b || t > b)) b = t; } return b; }
+  function morningSync() {
+    for (let i = 0; i < 7; i++) { const r = days()[idOf(addDays(today, -i))]; const t = r && r.health && r.health.synced_at; if (t) { const hr = new Date(t).getHours(); if (hr >= 5 && hr < 12) return true; } }
+    return false;
+  }
+  function renderBody() {
+    if (!window.CutBody || $('tab-body').hidden) return;
+    if (!bdSel || bdSel > idOf(today)) bdSel = latestHealthDay();
+    CutBody.render({
+      days: days(), scores: bodyScores, selected: bdSel, today: idOf(today),
+      isCheat: id => (days()[id] || {}).mark === 'cheat', isDone: id => (days()[id] || {}).mark === 'done', sessions: id => sessOf(rec(id)),
+      lastWatch: watchLast(), lastImport: lastImport(), morningSync: morningSync(), ago
+    });
+  }
+  const shiftDay = n => { const d = addDays(parseId(bdSel || idOf(today)), n); if (idOf(d) <= idOf(today)) { bdSel = idOf(d); renderBody(); } };
+  $('bdPrev').addEventListener('click', () => shiftDay(-1));
+  $('bdNext').addEventListener('click', () => shiftDay(1));
+  $('bdWeek').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b && !b.disabled) { bdSel = b.dataset.day; renderBody(); } });
+  // swipe left/right on the hero to change day
+  (() => { let x0 = null; const el = $('bdHero'); el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true }); el.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) shiftDay(dx > 0 ? -1 : 1); }); })();
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-goto]'); if (!b) return;
+    const id = b.dataset.goto, inSettings = ['impCard', 'watchCard', 'remCard'].includes(id);
+    if (inSettings) show('settings', false);
+    setTimeout(() => { const el = $(id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (id === 'watchCard') $('wGuide').open = true; }, 60);
+  });
+  $('openBody').addEventListener('click', () => show('body'));
   let bhMetric = 'recovery', bhRange = 30;
   try { const j = JSON.parse(localStorage.getItem('cutlog-bh') || 'null'); if (j) { bhMetric = j.m || bhMetric; bhRange = j.r != null ? j.r : bhRange; } } catch (e) {}
   function renderBodyHist() {
@@ -484,7 +514,7 @@
   $('ctaLog').addEventListener('click', () => { sel = idOf(today); viewY = today.getFullYear(); viewM = today.getMonth(); render(); show('log'); });
 
   // ---------- tabs ----------
-  const TABS = ['home', 'log', 'stats', 'badges', 'settings'];
+  const TABS = ['home', 'log', 'stats', 'body', 'settings'];
   function show(t, scroll) {
     if (!TABS.includes(t)) t = 'home';
     TABS.forEach(n => { $('tab-' + n).hidden = n !== t; });
@@ -493,6 +523,7 @@
     if (scroll !== false) window.scrollTo(0, 0);
     if (t === 'stats') renderPhotos();
     if (t === 'settings') renderSettings();
+    if (t === 'body') renderBody();
   }
   document.querySelector('.nav').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) show(b.dataset.go); });
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
@@ -743,7 +774,7 @@
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';
-  let remPrefs = { hour: 20, log: true, protein: true, waist: true };
+  let remPrefs = { hour: 20, log: true, protein: true, waist: true, morning: true, history: true, mhour: 8 };
   try { const j = JSON.parse(localStorage.getItem(REM_KEY) || 'null'); if (j) remPrefs = Object.assign(remPrefs, j); } catch (e) {}
   const saveRemLocal = () => { try { localStorage.setItem(REM_KEY, JSON.stringify(remPrefs)); } catch (e) {} };
   const pushOK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -751,10 +782,10 @@
   const standalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   const remMsg = t => { $('remMsg').textContent = t; };
   const vapidBytes = k => { const b = (k + '='.repeat((4 - k.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'); const r = atob(b); return Uint8Array.from(r, c => c.charCodeAt(0)); };
-  (function fillHours() { const sel = $('remHour'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = pad(h) + ':00'; sel.appendChild(o); } })();
+  (function fillHours() { const sel = $('remHour'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = pad(h) + ':00'; sel.appendChild(o); $('remMHour').appendChild(o.cloneNode(true)); } })();
   async function currentSub() { if (!pushOK()) return null; try { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 2000))]); return reg ? await reg.pushManager.getSubscription() : null; } catch (e) { return null; } }
   async function renderRem() {
-    $('remHour').value = String(remPrefs.hour); setSeg($('segRem'), remPrefs);
+    $('remHour').value = String(remPrefs.hour); $('remMHour').value = String(remPrefs.mhour); setSeg($('segRem'), remPrefs);
     const u = Store.user;
     let why = '';
     if (!Store.connected) why = 'Reminders switch on once the database is connected.';
@@ -770,6 +801,7 @@
     if (Notification.permission === 'denied') remMsg('Notifications are blocked for this app. Allow them in your phone’s Settings, then come back.');
   }
   $('remHour').addEventListener('change', () => { remPrefs.hour = Number($('remHour').value); saveRemLocal(); });
+  $('remMHour').addEventListener('change', () => { remPrefs.mhour = Number($('remMHour').value); saveRemLocal(); });
   $('segRem').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; remPrefs[b.dataset.v] = !remPrefs[b.dataset.v]; saveRemLocal(); setSeg($('segRem'), remPrefs); });
   $('remOn').addEventListener('click', () => turnOnReminders());
   async function turnOnReminders() {

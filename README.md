@@ -16,6 +16,7 @@ A gamified tracker for a fat-loss cut, built as an installable web app. Streaks,
 | `sw.js` | Service worker, so the app opens with no signal |
 | `config.js` | Supabase address and public key (empty = phone-only mode) |
 | `supabase/schema.sql` | Database tables, security rules, Apple Health endpoint, photo storage, reminder functions |
+| `body.js` | The Body tab: day browser, recovery dial, contributors, strain target and heart-rate zones, sleep stages and bedtime, trends, insights |
 | `health.js` | Whoop-style Recovery, Strain and Sleep scores and the body history chart |
 | `health-import-worker.js` + `vendor/fflate.min.js` | Reads the Health app's export.zip on the phone (streaming, any size) into one row per day |
 | `supabase/functions/cut/index.ts` | Edge Function: receives Apple Watch data from the iPhone Shortcut and sends daily reminders (Web Push on Web Crypto, no libraries) |

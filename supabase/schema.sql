@@ -135,6 +135,7 @@ create policy "own photos delete" on storage.objects for delete to authenticated
 alter table public.push_subs add column if not exists prefs jsonb not null default '{"hour":20,"log":true,"protein":true,"waist":true}'::jsonb;
 alter table public.push_subs add column if not exists tz text not null default 'Europe/London';
 alter table public.push_subs add column if not exists last_sent date;
+alter table public.push_subs add column if not exists last_morning date;
 
 -- The push key pair. The "reminders" Edge Function creates it on first use; nobody copies it anywhere.
 -- No policies, so only the Edge Function (service role) can read the private half.

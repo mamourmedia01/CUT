@@ -28,7 +28,7 @@
   function compute(days) {
     const ids = Object.keys(days).filter(id => days[id] && days[id].health).sort();
     const out = {};
-    const hist = { hrv: [], rhr: [] }; // [dayN, value]
+    const hist = { hrv: [], rhr: [], resp: [], temp: [], sleep: [] }; // [dayN, value]
     let prevStrain = null, prevN = null;
     for (const id of ids) {
       const h = days[id].health, n = dayN(id), o = {};
@@ -36,18 +36,24 @@
       const need = 8 + (prevStrain != null && prevN === n - 1 ? Math.max(0, prevStrain - 10) * 0.06 : 0);
       if (num(h.sleep_h) != null) { o.sleep = h.sleep_h; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, h.sleep_h / need)); }
       // baselines from the previous 60 days only
-      ['hrv', 'rhr'].forEach(k => { hist[k] = hist[k].filter(p => p[0] >= n - W && p[0] < n); });
+      ['hrv', 'rhr', 'resp', 'temp'].forEach(k => { hist[k] = hist[k].filter(p => p[0] >= n - W && p[0] < n); });
+      hist.sleep = hist.sleep.filter(p => p[0] >= n - 7 && p[0] < n);
       const hrv = num(h.hrv_ms), rhr = num(h.rhr);
       const parts = [];
       if (hrv != null && hrv > 0 && hist.hrv.length >= MIN) {
         const a = hist.hrv.map(p => Math.log(p[1])); const z = (Math.log(hrv) - mean(a)) / Math.max(sd(a), 0.08);
-        parts.push([0.5, z]); o.hrvNorm = Math.round(Math.exp(mean(a)));
+        parts.push([0.5, z]); o.hrvNorm = Math.round(Math.exp(mean(a))); o.hrvZ = z;
       }
       if (rhr != null && hist.rhr.length >= MIN) {
         const a = hist.rhr.map(p => p[1]); const z = -(rhr - mean(a)) / Math.max(sd(a), 2);
-        parts.push([0.25, z]); o.rhrNorm = Math.round(mean(a));
+        parts.push([0.25, z]); o.rhrNorm = Math.round(mean(a)); o.rhrZ = z;
       }
-      if (o.sleepPerf != null && parts.length) parts.push([0.25, (Math.min(1.1, h.sleep_h / need) - 0.9) / 0.12]);
+      if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, h.sleep_h / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
+      // not scored, but flagged: breathing rate and wrist temperature well above your normal often mean illness or poor recovery
+      const resp = num(h.resp_rate), temp = num(h.wrist_temp);
+      if (resp != null && hist.resp.length >= MIN) { const a = hist.resp.map(p => p[1]); o.respNorm = Math.round(mean(a) * 10) / 10; o.respHigh = resp > mean(a) + Math.max(1, 2 * sd(a)); }
+      if (temp != null && hist.temp.length >= MIN) { const a = hist.temp.map(p => p[1]); o.tempDev = Math.round((temp - mean(a)) * 10) / 10; }
+      if (o.sleepPerf != null) { o.debt = Math.round(hist.sleep.reduce((t, p) => t + Math.max(0, p[1]), 0) * 10) / 10; }
       if (parts.length && hrv != null && hist.hrv.length >= MIN) {
         const w = parts.reduce((s, p) => s + p[0], 0), z = clamp(parts.reduce((s, p) => s + p[0] * p[1], 0) / w, -2.5, 2.5);
         o.recovery = Math.round(clamp(60 + 20 * z, 1, 99));
@@ -55,13 +61,16 @@
       o.hrv = hrv; o.rhr = rhr;
       if (hrv != null && hrv > 0) hist.hrv.push([n, hrv]);
       if (rhr != null) hist.rhr.push([n, rhr]);
+      if (resp != null) hist.resp.push([n, resp]);
+      if (temp != null) hist.temp.push([n, temp]);
+      if (o.sleep != null) hist.sleep.push([n, need - o.sleep]);
       if (o.strain != null) { prevStrain = o.strain; prevN = n; }
       out[id] = o;
     }
     return out;
   }
 
-  const band = r => r == null ? null : r >= 67 ? { c: 'var(--done)', t: 'Ready' } : r >= 34 ? { c: 'var(--xp)', t: 'Moderate' } : { c: 'var(--cheat)', t: 'Rest' };
+  const band = r => r == null ? null : r >= 67 ? { c: 'var(--done)', t: 'Ready to push' } : r >= 34 ? { c: 'var(--xp)', t: 'Moderate' } : { c: 'var(--cheat)', t: 'Rest day' };
 
   function ring(frac, color, big, small, label) {
     const R = 34, C = 2 * Math.PI * R, f = clamp(frac || 0, 0, 1);
@@ -127,5 +136,78 @@
   }
   function idFromN(n) { return new Date(n * 864e5).toISOString().slice(0, 10); }
 
-  window.CutHealth = { compute, strainOf, band, ring, chart, METRICS, fmtN };
+  // ---------- coach ----------
+  function coach(sc) {
+    const r = sc && sc.recovery;
+    if (r == null) return null;
+    if (r >= 67) return { lo: 14, hi: 18, t: 'Green light. A heavy session or a double fits today.' };
+    if (r >= 34) return { lo: 10, hi: 14, t: 'Train, but keep it controlled. One solid session, no extra volume.' };
+    return { lo: 0, hi: 10, t: 'Your body is asking for rest. Walk, stretch, and hit your protein to protect muscle on the cut.' };
+  }
+
+  const minsOfDay = ms => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
+  const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  // circular mean/sd for clock times (bedtimes cross midnight)
+  function clockStats(mins) {
+    const a = mins.map(m => m / 1440 * 2 * Math.PI), sx = mean(a.map(Math.sin)), cx = mean(a.map(Math.cos));
+    const m = (Math.atan2(sx, cx) / (2 * Math.PI) * 1440 + 1440) % 1440, R = Math.min(1, Math.hypot(sx, cx));
+    return { mean: m, sd: Math.sqrt(-2 * Math.log(Math.max(R, 1e-6))) / (2 * Math.PI) * 1440 };
+  }
+  function sleepPlan(days, scores, id) {
+    const ids = Object.keys(days).filter(k => k <= id && days[k] && days[k].health && days[k].health.wake_ms).sort().slice(-14);
+    const wakes = ids.map(k => minsOfDay(days[k].health.wake_ms)), beds = ids.slice(-7).map(k => minsOfDay(days[k].health.bed_ms || days[k].health.wake_ms));
+    const sc = scores[id] || {};
+    const debt = sc.debt || 0, strain = sc.strain || 0;
+    const need = 8 + Math.max(0, strain - 10) * 0.06 + Math.min(1, debt * 0.25);
+    const out = { need: Math.round(need * 10) / 10, debt };
+    if (wakes.length >= 3) { const w = clockStats(wakes); out.wake = hm(w.mean); out.bed = hm(w.mean - need * 60 - 15); }
+    if (beds.length >= 4) { const b = clockStats(beds); out.consistency = Math.round(clamp(100 - b.sd * 0.8, 0, 100)); out.bedSd = Math.round(b.sd); }
+    return out;
+  }
+
+  // 7 days vs the 7 before
+  function trends(days, scores, id) {
+    const end = dayN(id);
+    const get = { hrv: (h) => h.hrv_ms, rhr: h => h.rhr, sleep: h => h.sleep_h, strain: (h, s) => s.strain, recovery: (h, s) => s.recovery, steps: h => h.steps };
+    const out = {};
+    for (const k in get) {
+      const a = [], b = [], spark = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date((end - i) * 864e5).toISOString().slice(0, 10), h = days[d] && days[d].health, v = h ? get[k](h, scores[d] || {}) : null;
+        if (i < 7) spark.push(typeof v === 'number' ? v : null);
+        if (typeof v === 'number') (i < 7 ? a : b).push(v);
+      }
+      if (a.length) out[k] = { now: mean(a), prev: b.length ? mean(b) : null, spark };
+    }
+    return out;
+  }
+
+  // What moves your body: compare groups of your own days (needs 3+ days in each group)
+  function insights(days, scores, isCheat, isDone, sessions) {
+    const ids = Object.keys(scores).sort(), next = id => new Date((dayN(id) + 1) * 864e5).toISOString().slice(0, 10);
+    const out = [];
+    const cmp = (label, aIds, bIds, metric, fmtFn) => {
+      const va = aIds.map(metric).filter(v => typeof v === 'number'), vb = bIds.map(metric).filter(v => typeof v === 'number');
+      if (va.length < 3 || vb.length < 3) return;
+      const d = mean(va) - mean(vb), rel = Math.abs(d) / Math.max(1, Math.abs(mean(vb)));
+      if (Math.abs(d) < 3 && rel < 0.05) return; // too small to mean anything
+      out.push({ label, diff: rel, text: fmtFn(d, mean(va), mean(vb)), n: va.length + vb.length });
+    };
+    const rec = id => (scores[id] || {}).recovery, hrvOf = id => (scores[id] || {}).hrv;
+    const pct = (a, b) => Math.round((a - b) / b * 100);
+    cmp('cheat', ids.filter(isCheat).map(next), ids.filter(isDone).map(next), rec,
+      (d, a, b) => 'After a cheat day your recovery averages ' + Math.round(a) + '%, against ' + Math.round(b) + '% after a clean day.');
+    cmp('sleep7', ids.filter(id => (scores[id] || {}).sleep >= 7), ids.filter(id => (scores[id] || {}).sleep != null && scores[id].sleep < 7), rec,
+      (d, a, b) => '7+ hours of sleep gives you ' + Math.round(a) + '% recovery on average, under 7 hours gives ' + Math.round(b) + '%.');
+    cmp('gym', ids.filter(id => sessions(id) > 0).map(next), ids.filter(id => sessions(id) === 0).map(next), hrvOf,
+      (d, a, b) => 'The morning after a gym day your HRV is ' + (a >= b ? pct(a, b) + '% higher' : pct(b, a) + '% lower') + ' than after a rest day (' + Math.round(a) + ' vs ' + Math.round(b) + ' ms).');
+    cmp('strain', ids.filter(id => (scores[id] || {}).strain >= 14).map(next), ids.filter(id => (scores[id] || {}).strain != null && scores[id].strain < 10).map(next), rec,
+      (d, a, b) => 'After a high-strain day (14+) you recover to ' + Math.round(a) + '%, after an easy day (under 10) to ' + Math.round(b) + '%.');
+    const late = id => { const h = days[id] && days[id].health; if (!h || !h.bed_ms) return null; const m = minsOfDay(h.bed_ms); return (m + 720) % 1440; };
+    cmp('bedtime', ids.filter(id => late(id) != null && late(id) >= 720 + 30), ids.filter(id => late(id) != null && late(id) < 720), rec,
+      (d, a, b) => 'Going to sleep after 00:30 averages ' + Math.round(a) + '% recovery, before midnight ' + Math.round(b) + '%.');
+    return out.sort((x, y) => Math.abs(y.diff) - Math.abs(x.diff));
+  }
+
+  window.CutHealth = { compute, strainOf, band, ring, chart, METRICS, fmtN, coach, sleepPlan, trends, insights, hm, dayN };
 })();
