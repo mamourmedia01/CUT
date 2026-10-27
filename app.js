@@ -526,7 +526,7 @@
   });
   $('aLink').addEventListener('click', async () => {
     const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
-    try { authMsg('Sending…'); await Store.emailLink(em); authMsg('Sent. Open the email on this phone and tap the link. Once you’re in, tap Turn on Face ID and you won’t need email again.'); }
+    try { authMsg('Sending…'); await Store.emailLink(em); authMsg('Sent. Open the email on this phone and tap the link: that creates your account (or signs you in). Then tap Turn on Face ID and you won’t need email again.'); }
     catch (e) { authMsg(/rate|too many/i.test(e.message || '') ? 'Too many emails just now. Wait a few minutes and try again.' : (e.message || 'Couldn’t send. Check you’re online.')); }
   });
   let showSignIn = false, retypeEmail = false;
