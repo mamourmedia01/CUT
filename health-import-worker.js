@@ -20,7 +20,7 @@ const AVG = { // per-day averages
   HKQuantityTypeIdentifierVO2Max: 'vo2max',
   HKQuantityTypeIdentifierAppleSleepingWristTemperature: 'wrist_temp'
 };
-const LAST = { HKQuantityTypeIdentifierBodyMass: 'weight_kg', HKQuantityTypeIdentifierBodyFatPercentage: 'body_fat' };
+const LAST = { HKQuantityTypeIdentifierBodyMass: 'weight_kg', HKQuantityTypeIdentifierBodyFatPercentage: 'body_fat', HKQuantityTypeIdentifierLeanBodyMass: 'lean_kg' };
 const HR = 'HKQuantityTypeIdentifierHeartRate';
 const SLEEP = 'HKCategoryTypeIdentifierSleepAnalysis';
 const STAGE = {

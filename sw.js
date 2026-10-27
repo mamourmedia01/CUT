@@ -1,7 +1,7 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
-const VERSION = 'cutlog-v20';
+const VERSION = 'cutlog-v21';
 const SHELL = [
-  './', './index.html', './health.js', './body.js', './health-import-worker.js', './vendor/fflate.min.js', './app.js', './store.js', './config.js', './manifest.webmanifest',
+  './', './index.html', './health.js', './food/foods.js', './body.js', './health-import-worker.js', './vendor/fflate.min.js', './app.js', './store.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js'
 ];
@@ -11,7 +11,7 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('cutlog-v') && k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', e => {
@@ -20,6 +20,13 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   // Never cache Supabase API traffic.
   if (url.hostname.endsWith('supabase.co') || url.hostname.endsWith('supabase.in')) return;
+  // The food model (Hugging Face) keeps its own cache; leave those downloads alone.
+  if (/(^|\.)(huggingface\.co|hf\.co|xethub\.hf\.co)$/.test(url.hostname) || url.hostname.includes('cdn-lfs')) return;
+  // The model runtime from jsDelivr is versioned and large: keep it in a cache that survives app updates.
+  if (url.hostname === 'cdn.jsdelivr.net' && /@huggingface\/transformers@|onnxruntime/.test(url.pathname)) {
+    e.respondWith(caches.open('ml-assets').then(c => c.match(req).then(hit => hit || fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; }))));
+    return;
+  }
 
   // Pages: network first so updates arrive, cache as fallback offline.
   if (req.mode === 'navigate') {

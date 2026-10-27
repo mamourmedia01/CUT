@@ -215,6 +215,55 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .plot{position:relative;margin-top:10px;touch-action:pan-y}
 .plot .tip{position:absolute;top:0;z-index:2;pointer-events:none;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px;font-size:.8rem;display:grid;line-height:1.3;white-space:nowrap}
 .plot .tip span{color:var(--muted)}
+.me{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--primary);color:var(--on-primary);font-family:var(--display);font-weight:800;font-size:1rem;cursor:pointer;display:grid;place-items:center;text-transform:uppercase}
+.bf{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.bfline{display:flex;align-items:baseline;gap:10px}.bfline b{font-family:var(--display);font-size:2rem;font-weight:800;line-height:1}.bfline span{color:var(--muted);font-size:.85rem}
+.sessions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sessions div{background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px}
+.sessions b{display:block;font-size:.9rem;margin-bottom:4px}.sessions small{display:block;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.sessions ul{margin:0;padding-left:16px;display:grid;gap:3px;font-size:.8rem;color:var(--muted)}
+@media (max-width:380px){.sessions{grid-template-columns:1fr}}
+.cmp{display:grid;gap:8px}
+.cmpbox{position:relative;aspect-ratio:3/4;border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);touch-action:pan-y}
+.cmpbox img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cmpline{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);pointer-events:none}
+.cmptag{position:absolute;top:8px;font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:rgba(0,0,0,.55);color:#fff;padding:3px 8px;border-radius:999px}
+.cmptag.l{left:8px}.cmptag.r{right:8px}
+.cmp input[type=range],.camghost input{width:100%;accent-color:var(--primary)}
+.cam{position:fixed;inset:0;z-index:100;background:#000;display:grid}
+.cam video,.cam #camGhost{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam video.mirror,.cam #camGhost.mirror{transform:scaleX(-1)}
+.cam #camGhost{opacity:.35;pointer-events:none}
+.camtop,.cambot{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:max(14px,env(safe-area-inset-top)) 16px 14px;color:#fff;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.camtop span{font-size:.85rem;text-align:center}
+.cambot{bottom:0;top:auto;padding:14px 16px max(22px,env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.cambtn{min-width:44px;min-height:44px;border-radius:999px;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.cambtn[aria-pressed="false"]{opacity:.55}
+.camshoot{width:74px;height:74px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center;cursor:pointer;flex:none}
+.camshoot i{width:58px;height:58px;border-radius:50%;background:#fff;display:block}
+.camghost{display:grid;gap:4px;font-size:.75rem;width:110px}
+.camcount{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);font-size:7rem;font-weight:800;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.6);pointer-events:none}
+.mslist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.mslist li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2)}
+.mslist .mk{flex:none;width:54px;height:54px;border-radius:14px;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.05rem;border:2px dashed var(--line);color:var(--muted);text-align:center;line-height:1}
+.mslist li.on .mk{background:var(--xp);border:0;color:var(--xp-ink)}
+.mslist li div{flex:1;display:grid;gap:1px;min-width:0}.mslist b{font-size:.92rem}.mslist span{font-size:.8rem;color:var(--muted)}
+.mslist .btn{min-height:36px;padding:0 12px;font-size:.82rem}
+.meals{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.meallist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.meallist li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-md);background:var(--surface-2);font-size:.9rem}
+.meallist li span{flex:1}.meallist li small{color:var(--muted)}
+.meallist li button{border:0;background:none;color:var(--muted);font-size:1.1rem;min-width:36px;min-height:36px;cursor:pointer}
+.mealbox{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r-md)}
+.mealprev{position:relative;border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);max-height:220px;display:grid}
+.mealprev img{width:100%;max-height:220px;object-fit:cover;display:block}
+.mealstat{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;font-size:.8rem;padding:6px 10px;border-radius:999px;text-align:center}
+.mealstat:empty{display:none}
+.targets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.targets div{background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px;display:grid;gap:1px}
+.targets span{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.targets b{font-family:var(--display);font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.targets i{font-style:normal;font-size:.76rem;color:var(--muted)}
 /* Home: Today agenda + last 7 days */
 .today{gap:10px}
 .hello{margin:0;font-family:var(--display);font-size:1.45rem;font-weight:800;text-transform:uppercase;letter-spacing:.01em;line-height:1.05}
@@ -429,6 +478,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     <div class="topright">
       <span class="syncdot" id="syncDot" data-s="local" role="img" aria-label="Saved on this phone"></span>
       <div class="daybig" id="dayOf">Day <b>–</b></div>
+      <button class="me" type="button" id="meChip" hidden aria-label="Your profile"><span id="meInit"></span></button>
     </div>
   </div>
 </header>
@@ -456,6 +506,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     <div class="card today" id="todayCard">
       <div class="row"><h3 class="hello" id="hello">Today</h3><span class="label" id="todayDate"></span></div>
       <ul class="agenda" id="agenda"></ul>
+      <div class="btns"><button class="btn" type="button" id="homeMeal">Snap a meal</button><button class="btn" type="button" id="homeBody">Today’s training</button></div>
     </div>
 
     <div class="card" style="gap:8px">
@@ -514,7 +565,11 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     <div class="card">
       <div class="row"><span class="label" id="kgTitle">Countdown to 85 kg</span><span class="label" id="kgSource">Estimate</span></div>
       <div class="kgbig"><span class="num" id="kgNow">–</span><span>kg this morning</span></div>
-      <div class="row"><small id="kgLeft"></small><small id="wake"></small></div>
+      <small id="kgLeft"></small>
+      <div class="targets">
+        <div><span>Tomorrow morning</span><b id="wake">–</b><i id="wakeD"></i></div>
+        <div><span id="wkTgtLbl">End of this week</span><b id="wkTgt">–</b><i id="wkTgtD"></i></div>
+      </div>
       <div class="bar kg" aria-hidden="true"><i id="kgFill" style="width:0%"></i></div>
       <div class="ends"><span id="kgStartLbl"></span><span id="kgGoalLbl"></span></div>
       <div class="tiles3">
@@ -582,6 +637,24 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <small id="protStatus"></small>
         </div>
       </div>
+      <div class="meals" id="meals">
+        <div class="row"><span class="label">Meals</span><span class="label" id="mealTotal"></span></div>
+        <ul class="meallist" id="mealList"></ul>
+        <div class="btns"><button class="btn primary" type="button" id="mealSnap">Snap a meal</button><button class="btn" type="button" id="mealType">Type it</button></div>
+        <input id="mealInput" type="file" accept="image/*" hidden>
+        <div class="mealbox" id="mealBox" hidden>
+          <div class="mealprev" id="mealPrev"><img id="mealImg" alt="Your meal"><div class="mealstat" id="mealStatus"></div></div>
+          <div class="chips" id="mealGuess" style="margin:0"></div>
+          <div class="fields">
+            <div class="field" style="grid-column:1/-1"><label class="label" for="mealName">What is it?</label><input id="mealName" list="foodList" autocomplete="off" maxlength="60"></div>
+            <div class="field"><label class="label" for="mealPortion">Portion</label><select id="mealPortion"><option value="0.6">Small</option><option value="1" selected>Regular</option><option value="1.5">Large</option><option value="2">Double</option></select></div>
+            <div class="field"><label class="label" for="mealKcal">kcal</label><input id="mealKcal" type="number" inputmode="numeric" min="0" max="6000" step="10"></div>
+          </div>
+          <small id="mealServing"></small>
+          <div class="btns"><button class="btn primary" type="button" id="mealAdd">Add meal</button><button class="btn" type="button" id="mealCancel">Cancel</button></div>
+        </div>
+        <datalist id="foodList"></datalist>
+      </div>
       <div class="energy" id="energy"></div>
       <div class="fields">
         <div class="field"><label class="label" for="fGym">Gym kcal</label><input id="fGym" type="number" min="0" max="4000" step="10" inputmode="numeric"></div>
@@ -622,6 +695,14 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="var(--blue)"/></svg>Weigh-in</span>
         <span><svg width="18" height="6" aria-hidden="true"><line x1="0" y1="3" x2="18" y2="3" stroke="var(--done)" stroke-width="2" stroke-dasharray="4 3"/></svg>Goal</span>
       </div>
+      <div class="bf" id="bfBox" hidden>
+        <div class="row"><span class="label">Body fat</span><span class="label" id="bfWhen"></span></div>
+        <div class="bfline"><b id="bfNow">–</b><span id="bfSub"></span></div>
+        <div class="bar kg" aria-hidden="true"><i id="bfFill" style="width:0%"></i></div>
+        <div class="ends"><span id="bfStart"></span><span id="bfGoalLbl"></span></div>
+        <div class="tiles3" id="bfTiles"></div>
+      </div>
+      <p class="note" id="bfEmpty">Body fat appears here once your smart scale writes it to Apple Health: add <b>Body Fat Percentage</b> to the Shortcut (Settings → Apple Watch), or import your Health history.</p>
     </div>
     <div class="card">
       <div class="row"><span class="label">Personal bests</span><span class="label" id="trophyCount">0 trophies</span></div>
@@ -633,12 +714,20 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     </div>
     <div class="card">
       <div class="row"><span class="label">Progress photos</span><span class="label" id="photoCount"></span></div>
+      <div class="chips" id="photoMode" role="group" aria-label="Compare view" style="margin:0">
+        <button type="button" data-pm="side" aria-pressed="true">Side by side</button><button type="button" data-pm="slide" aria-pressed="false">Slider</button><button type="button" data-pm="fade" aria-pressed="false">Fade</button>
+      </div>
       <div class="photos">
         <div class="field"><label class="label" for="photoA">Then</label><select id="photoA"></select><div class="photo" id="photoAImg">No photo yet</div></div>
         <div class="field"><label class="label" for="photoB">Now</label><select id="photoB"></select><div class="photo" id="photoBImg">No photo yet</div></div>
       </div>
+      <div class="cmp" id="photoCmp" hidden>
+        <div class="cmpbox"><img id="cmpA" alt="Then"><img id="cmpB" alt="Now"><i class="cmpline" id="cmpLine"></i><span class="cmptag l" id="cmpTagA">Then</span><span class="cmptag r" id="cmpTagB">Now</span></div>
+        <input type="range" id="cmpRange" min="0" max="100" value="50" aria-label="Compare">
+      </div>
       <div class="btns">
-        <label class="btn primary" for="photoInput" style="display:inline-flex;align-items:center">Add this week's photo</label>
+        <button class="btn primary" type="button" id="camOpen">Take this week's photo</button>
+        <label class="btn" for="photoInput" style="display:inline-flex;align-items:center">Choose from library</label>
         <input id="photoInput" type="file" accept="image/*" hidden>
       </div>
       <small>One photo per cut week. Same spot, same light, same time of day makes the comparison fair. Photos stay private.</small>
@@ -652,7 +741,21 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         </table>
       </div>
     </div>
-  <div class="card"><div class="row"><span class="label">Badges</span><span class="label" id="badgeCount">0 / 12</span></div>
+    <div class="card">
+      <div class="row"><span class="label">Milestones</span><span class="label" id="msCount"></span></div>
+      <ul class="mslist" id="msList"></ul>
+      <small>Every 5 kg off your start weight, and the goal itself. Tap Share to send your card.</small>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Monthly report</span><span class="label">Calendar months</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Month</th><th>Days</th><th>Gym</th><th>Weight</th><th>Recov.</th><th>Sleep</th></tr></thead>
+          <tbody id="months"></tbody>
+        </table>
+      </div>
+    </div>
+  <div class="card"><div class="row"><span class="label" id="badgeTitle">Badges</span><span class="label" id="badgeCount">0 / 12</span></div>
     <div class="bgrid" id="bgrid"></div></div>
   </section>
 
@@ -674,6 +777,13 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     <div id="bdMain">
       <div class="hero" id="bdHero"></div>
       <p class="coach" id="bdCoach"></p>
+
+      <div class="card bsec" id="bdTrain" hidden>
+        <div class="bhead"><h3 class="bh" id="trName">Today’s training</h3><span class="bval" id="trTarget"></span></div>
+        <div class="target" id="trBar"></div>
+        <p class="note" id="trWhy"></p>
+        <div class="sessions" id="trSessions"></div>
+      </div>
 
       <div class="card bsec" id="bdRec">
         <div class="bhead"><h3 class="bh">Recovery</h3><span class="bval" id="bdRecVal"></span></div>
@@ -808,6 +918,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <div class="field"><label class="label" for="sProtE">Protein every N days</label><input id="sProtE" type="number" min="1" max="14" step="1" inputmode="numeric"></div>
         <div class="field"><label class="label" for="sProtA">Protein schedule from</label><input id="sProtA" type="date"></div>
         <div class="field"><label class="label" for="sWeeks">Milestone at week</label><input id="sWeeks" type="number" min="1" max="52" step="1" inputmode="numeric"></div>
+        <div class="field"><label class="label" for="sBf">Body fat goal %</label><input id="sBf" type="number" step="0.5" min="3" max="40" inputmode="decimal"></div>
         <div class="field" style="grid-column:1/-1"><label class="label" for="sShake">Protein shake (shown in reminders)</label><input id="sShake" type="text" maxlength="60"></div>
       </div>
       <div class="btns"><button class="btn primary" type="button" id="sSave">Save plan</button></div>
@@ -884,8 +995,26 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
             <li>Leave <b>Is Opened</b> ticked, choose <b>Run Immediately</b>, and tap <b>Next</b>.</li>
             <li>Tap <b>Cut Log Sync</b>. Done: every time you open that app, today's numbers update.</li>
           </ol>
-          <p class="note">Optional extras, added the same way as section B with <b>Group By</b> → <b>Day</b>, plus a field in section D: <b>Steps</b> as <button type="button" class="key" data-copy="steps">steps</button>, <b>Resting Energy</b> as <button type="button" class="key" data-copy="resting_kcal">resting_kcal</button>, <b>Respiratory Rate</b> as <button type="button" class="key" data-copy="resp_rate">resp_rate</button>.</p>
+          <p class="note">Optional extras, added the same way as section B with <b>Group By</b> → <b>Day</b>, plus a field in section D: <b>Steps</b> as <button type="button" class="key" data-copy="steps">steps</button>, <b>Resting Energy</b> as <button type="button" class="key" data-copy="resting_kcal">resting_kcal</button>, <b>Respiratory Rate</b> as <button type="button" class="key" data-copy="resp_rate">resp_rate</button>, <b>Body Fat Percentage</b> as <button type="button" class="key" data-copy="body_fat">body_fat</button>, <b>Lean Body Mass</b> as <button type="button" class="key" data-copy="lean_kg">lean_kg</button> (body fat and lean mass come from your smart scale's app, if it writes to Apple Health).</p>
           <small>If the notification says the key isn't valid, make a new link above and paste it again in section D. “Missing authorization header” means the header in section D is missing or incomplete. Sleep stages, real workouts and heart-rate strain come from <b>Apple Health history</b> below.</small>
+        </details>
+        <details class="guide" id="phoneGuide">
+          <summary>Real sleep when the Watch is off (2 minutes, once)</summary>
+          <p class="note">When your Watch is charging, Apple Health can log a whole “in bed” schedule as sleep. Cut Log fixes that with your phone use: you can’t be asleep while you’re using your phone. A tiny Shortcut tells Cut Log each time you open or close an app. Only the time is sent, never which app.</p>
+          <span class="label">Phone-use link</span><div class="token" id="pLink">Loading…</div>
+          <div class="btns"><button class="btn primary" type="button" id="pCopy">Copy phone-use link</button><button class="btn" type="button" id="pCopyHead">Copy header</button></div>
+          <h4 class="gstep">A. The Shortcut</h4>
+          <ol>
+            <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a>, rename it <button type="button" class="key" data-copy="Cut Log Phone">Cut Log Phone</button>.</li>
+            <li>Add <button type="button" class="key" data-copy="Get Contents of URL">Get Contents of URL</button>, tap <b>URL</b> and paste the <b>phone-use link</b>.</li>
+            <li>Tap the small arrow, <b>Headers</b> → <b>Add new header</b>: Key <button type="button" class="key" data-copy="Authorization">Authorization</button>, Text: paste the <b>header</b>. Leave Method on <b>GET</b>. Tap <b>Done</b>.</li>
+          </ol>
+          <h4 class="gstep">B. Run it whenever you use your phone</h4>
+          <ol>
+            <li><b>Automation</b> → <b>+</b> → <b>App</b> → <b>Choose</b>: tick every app you use a lot (WhatsApp, Instagram, Safari, YouTube, Messages, Snapchat, TikTok, X, Mail…). Tap <b>Done</b>.</li>
+            <li>Tick both <b>Is Opened</b> and <b>Is Closed</b>, choose <b>Run Immediately</b>, turn off <b>Notify When Run</b>, tap <b>Next</b>, then <b>Cut Log Phone</b>.</li>
+          </ol>
+          <small id="pStatus">Cut Log also counts every time you open Cut Log itself. After a night with it on, Body shows “Corrected by phone use” when Health over-counted.</small>
         </details>
         <details class="guide" id="appAdv">
           <summary>Advanced: Cut Log Sync iPhone app (live sync)</summary>
@@ -925,6 +1054,22 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="btns"><label class="btn primary" for="impFile" style="display:inline-flex;align-items:center">Choose export.zip</label><input id="impFile" type="file" accept=".zip,.xml,application/zip,text/xml" hidden></div>
       <div class="bar imp" id="impBar" hidden aria-hidden="true"><i id="impFill" style="width:0%"></i></div>
       <small id="impMsg"></small>
+    </div>
+
+    <div class="card" id="widgetCard">
+      <div class="row"><span class="label">Lock-screen widget</span><span class="label">Free</span></div>
+      <p class="note">Your streak, recovery, weight and next shake on your Lock Screen and Home Screen, updating every 15 minutes. It uses <b>Scriptable</b>, a free app that runs small scripts as widgets.</p>
+      <div id="widgetNeeds"><small>Sign in first: the widget reads your numbers with your personal link.</small></div>
+      <div id="widgetReady" hidden>
+        <ol class="guide-ol">
+          <li>Install <a href="https://apps.apple.com/app/scriptable/id1405459188" target="_blank" rel="noopener">Scriptable</a> from the App Store (free, no account).</li>
+          <li>Tap <b>Copy widget script</b> below. Open Scriptable, tap <b>+</b>, paste, then tap the title at the top and name it <button type="button" class="key" data-copy="Cut Log">Cut Log</button>. Tap <b>Done</b>.</li>
+          <li><b>Lock Screen</b>: press and hold it, tap <b>Customize</b> → <b>Lock Screen</b> → the widget row → <b>Scriptable</b>, pick the wide one, tap it and choose <b>Script: Cut Log</b>.</li>
+          <li><b>Home Screen</b> (optional): press and hold, tap <b>+</b> → <b>Scriptable</b> → <b>Medium</b>, then tap the widget and choose <b>Cut Log</b>.</li>
+        </ol>
+        <div class="btns"><button class="btn primary" type="button" id="widgetCopy">Copy widget script</button></div>
+        <small>The script holds your personal link. If you ever tap Make a new link, copy the script again.</small>
+      </div>
     </div>
 
     <div class="card" id="autoCard">
@@ -988,9 +1133,21 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg" id="toastMsg"></span><button type="button" id="toastUndo" hidden>Undo</button></div>
 
+<div class="cam" id="cam" hidden role="dialog" aria-label="Progress photo camera">
+  <video id="camVideo" playsinline muted autoplay></video>
+  <img id="camGhost" alt="" aria-hidden="true">
+  <div class="camcount" id="camCount" hidden></div>
+  <div class="camtop"><button type="button" class="cambtn" id="camClose" aria-label="Close">✕</button><span id="camHint">Line yourself up with last week’s ghost</span><button type="button" class="cambtn" id="camFlip" aria-label="Switch camera">⟲</button></div>
+  <div class="cambot">
+    <label class="camghost"><span>Ghost</span><input type="range" id="camGhostOp" min="0" max="70" value="35"></label>
+    <button type="button" class="camshoot" id="camShoot" aria-label="Take photo with 3 second timer"><i></i></button>
+    <button type="button" class="cambtn" id="camTimer" aria-pressed="true">3 s</button>
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
+<script src="food/foods.js"></script>
 <script src="health.js"></script>
 <script src="body.js"></script>
 <script src="app.js"></script>

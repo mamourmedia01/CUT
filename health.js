@@ -24,6 +24,17 @@
     return { v: 21 * (1 - Math.exp(-t / 250)), est: true };
   }
 
+  // Sleep you actually got. The Watch's number is capped by phone use (you can't be asleep while using
+  // your phone: an iPhone "in bed" schedule or a Watch on the charger can over-count). With no Watch
+  // sleep at all, the longest phone-free stretch is the estimate. Same rule as the server.
+  function sleepOf(h) {
+    if (!h) return null;
+    const raw = num(h.sleep_h), cap = num(h.sleep_cap_h), ph = num(h.sleep_phone_h);
+    if (raw != null) return cap != null && raw > cap + 0.25 ? { v: ph != null ? ph : cap, src: 'capped', raw } : { v: raw, src: 'watch' };
+    if (ph != null) return { v: ph, src: 'phone' };
+    return null;
+  }
+
   // scores for every day that has Apple Health data; days = Store.days
   function compute(days) {
     const ids = Object.keys(days).filter(id => days[id] && days[id].health).sort();
@@ -34,7 +45,8 @@
       const h = days[id].health, n = dayN(id), o = {};
       const s = strainOf(h); if (s) { o.strain = Math.round(s.v * 10) / 10; o.strainEst = s.est; }
       const need = 8 + (prevStrain != null && prevN === n - 1 ? Math.max(0, prevStrain - 10) * 0.06 : 0);
-      if (num(h.sleep_h) != null) { o.sleep = h.sleep_h; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, h.sleep_h / need)); }
+      const sl = sleepOf(h);
+      if (sl) { o.sleep = sl.v; o.sleepSrc = sl.src; if (sl.raw != null) o.sleepRaw = sl.raw; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, sl.v / need)); }
       // baselines from the previous 60 days only
       ['hrv', 'rhr', 'resp', 'temp'].forEach(k => { hist[k] = hist[k].filter(p => p[0] >= n - W && p[0] < n); });
       hist.sleep = hist.sleep.filter(p => p[0] >= n - 7 && p[0] < n);
@@ -48,7 +60,7 @@
         const a = hist.rhr.map(p => p[1]); const z = -(rhr - mean(a)) / Math.max(sd(a), 2);
         parts.push([0.25, z]); o.rhrNorm = Math.round(mean(a)); o.rhrZ = z;
       }
-      if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, h.sleep_h / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
+      if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, o.sleep / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
       // not scored, but flagged: breathing rate and wrist temperature well above your normal often mean illness or poor recovery
       const resp = num(h.resp_rate), temp = num(h.wrist_temp);
       if (resp != null && hist.resp.length >= MIN) { const a = hist.resp.map(p => p[1]); o.respNorm = Math.round(mean(a) * 10) / 10; o.respHigh = resp > mean(a) + Math.max(1, 2 * sd(a)); }
@@ -83,12 +95,13 @@
   const METRICS = {
     recovery: { name: 'Recovery', unit: '%', color: 'var(--done)', get: (h, s) => s && s.recovery, lo: 0, hi: 100, better: 1 },
     strain: { name: 'Strain', unit: '', color: 'var(--blue)', get: (h, s) => s && s.strain, lo: 0, hi: 21, dp: 1 },
-    sleep: { name: 'Sleep', unit: 'h', color: 'var(--sleep)', get: h => h.sleep_h, dp: 1, better: 1 },
+    sleep: { name: 'Sleep', unit: 'h', color: 'var(--sleep)', get: h => { const s = sleepOf(h); return s ? s.v : null; }, dp: 1, better: 1 },
     hrv: { name: 'HRV', unit: 'ms', color: 'var(--blue)', get: h => h.hrv_ms, better: 1 },
     rhr: { name: 'Resting HR', unit: 'bpm', color: 'var(--primary)', get: h => h.rhr, better: -1 },
     steps: { name: 'Steps', unit: '', color: 'var(--primary)', get: h => h.steps, lo: 0, better: 1 },
     active: { name: 'Active kcal', unit: 'kcal', color: 'var(--primary)', get: h => h.active_kcal, lo: 0, better: 1 },
     weight: { name: 'Weight', unit: 'kg', color: 'var(--primary)', get: h => h.weight_kg, dp: 1, better: -1 },
+    bodyfat: { name: 'Body fat', unit: '%', color: 'var(--cheat)', get: h => h.body_fat, dp: 1, better: -1 },
     vo2: { name: 'VO₂ max', unit: '', color: 'var(--primary)', get: h => h.vo2max, dp: 1, better: 1 }
   };
   const fmtN = (v, dp) => v == null ? '–' : (dp ? v.toFixed(dp) : Math.round(v).toLocaleString('en-GB'));
@@ -160,6 +173,20 @@
     return { lo: 0, hi: 10, t: 'Your body is asking for rest. Walk, stretch, and hit your protein to protect muscle on the cut.' };
   }
 
+  // Today's training, set by recovery. Built around the routine: bike warm-up, Stairmaster, sprint
+  // intervals, heavy full-body in the morning, a light session later on double days.
+  const PLANS = {
+    green: { name: 'Push day', why: 'Recovered: go heavy, a double fits.', am: ['Heavy full-body', ['Bike warm-up, 5–10 min', 'Compound lifts 4 × 6–8, heavy', 'Stairmaster level 12, 10 min', 'Sprints: 10 min of 20 s on at 14–18 km/h']], pm: ['Light second session', ['Press-ups and core, 3 rounds', 'Machines, light, 2 × 12', 'Stretch 15 min']] },
+    amber: { name: 'Steady day', why: 'Part recovered: train, but keep 2 reps in the tank.', am: ['Full-body, controlled', ['Bike warm-up, 5–10 min', 'Lifts 3 × 8–10, stop 2 reps short', 'Stairmaster level 10, 10 min', 'No sprints today']], pm: ['Optional: easy walk', ['Incline walk 20–30 min, chatty pace', 'Stretch 10 min']] },
+    red: { name: 'Recovery day', why: 'Under-recovered: training hard today costs muscle on a cut.', am: ['Move, don’t train', ['Walk or easy bike, 30–40 min', 'Mobility and stretching, 20 min']], pm: ['Rest', ['Early night: hit your sleep target', 'Water and electrolytes']] }
+  };
+  function train(sc) {
+    const r = sc && sc.recovery, key = r == null ? 'amber' : r >= 67 ? 'green' : r >= 34 ? 'amber' : 'red';
+    const co = coach(sc) || { lo: 10, hi: 14 }, P = PLANS[key], st = sc && sc.strain != null ? sc.strain : null;
+    const status = st == null ? null : st > co.hi ? 'over' : st >= co.lo ? 'hit' : 'under';
+    return { key, name: P.name, why: r == null ? 'No recovery score yet, so a steady day until your watch syncs.' : P.why, am: P.am, pm: P.pm, lo: co.lo, hi: co.hi, strain: st, status };
+  }
+
   const minsOfDay = ms => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
   const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
   // circular mean/sd for clock times (bedtimes cross midnight)
@@ -183,7 +210,7 @@
   // 7 days vs the 7 before
   function trends(days, scores, id) {
     const end = dayN(id);
-    const get = { hrv: (h) => h.hrv_ms, rhr: h => h.rhr, sleep: h => h.sleep_h, strain: (h, s) => s.strain, recovery: (h, s) => s.recovery, steps: h => h.steps };
+    const get = { hrv: (h) => h.hrv_ms, rhr: h => h.rhr, sleep: h => { const s = sleepOf(h); return s ? s.v : null; }, strain: (h, s) => s.strain, recovery: (h, s) => s.recovery, steps: h => h.steps };
     const out = {};
     for (const k in get) {
       const a = [], b = [], spark = [];
@@ -224,5 +251,5 @@
     return out.sort((x, y) => Math.abs(y.diff) - Math.abs(x.diff));
   }
 
-  window.CutHealth = { compute, strainOf, band, ring, chart, METRICS, fmtN, coach, sleepPlan, trends, insights, hm, dayN };
+  window.CutHealth = { compute, sleepOf, train, strainOf, band, ring, chart, METRICS, fmtN, coach, sleepPlan, trends, insights, hm, dayN };
 })();

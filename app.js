@@ -13,7 +13,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const SHAKE = '<svg class="shake" viewBox="0 0 20 26" aria-hidden="true"><path d="M6 0h8v4l2 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7l2-3z"/></svg>';
 
-  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, shake: '5 scoops in 500 ml water', autoHour: 12 };
+  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, shake: '5 scoops in 500 ml water', autoHour: 12, bfGoal: 15 };
   const LEVELS = [[0, 'Rookie'], [400, 'Starter'], [1000, 'Grinder'], [2000, 'Machine'], [3500, 'Warrior'], [5500, 'Beast'], [8000, 'Shredded'], [11000, 'Legend']];
   const BADGES = [
     { m: '1', name: 'First Step', desc: 'First completed day', test: s => s.done >= 1 },
@@ -38,7 +38,7 @@
   let last = null;
   let mode = 'day'; try { const m = localStorage.getItem('cutlog-mode'); if (m === 'day' || m === 'gym' || m === 'details') mode = m; } catch (e) {}
 
-  const rec = id => Object.assign({ mark: null, broken: false, am: false, pm: false, weight: null, waist: null, curl: null, chest: null, protein: null, gymKcal: null, food: null, health: null }, days()[id] || {});
+  const rec = id => Object.assign({ meals: null, mark: null, broken: false, am: false, pm: false, weight: null, waist: null, curl: null, chest: null, protein: null, gymKcal: null, food: null, health: null }, days()[id] || {});
   const H = (r, k) => (r.health && typeof r.health[k] === 'number') ? r.health[k] : null;
   const userSess = r => (r.am ? 1 : 0) + (r.pm ? 1 : 0);
   // Watch sessions: real workouts (Health import) if known, else from Exercise Minutes (20+ = 1 session, 90+ = 2).
@@ -69,14 +69,15 @@
   // ---------- energy ----------
   function energy(id, r, prot) {
     const p = plan(), sess = sessOf(r);
-    if (!r.mark && !sess && r.food == null && r.gymKcal == null) return null;
+    if (!r.mark && !sess && r.food == null && r.gymKcal == null && !(Array.isArray(r.meals) && r.meals.length)) return null;
     const active = H(r, 'active_kcal');
     const gym = r.gymKcal != null ? r.gymKcal : (active != null ? active : sess * p.sessionKcal);
     const rest = H(r, 'resting_kcal') != null ? H(r, 'resting_kcal') : p.baseBurn;
     const taken = !!(prot[id] && prot[id].taken);
-    const food = r.food != null ? r.food : (r.mark === 'cheat' ? rest : (taken ? p.proteinKcal : 0));
+    const meals = Array.isArray(r.meals) && r.meals.length ? r.meals.reduce((a, m) => a + (+m.k || 0), 0) : null;
+    const food = r.food != null ? r.food : meals != null ? meals + (taken ? p.proteinKcal : 0) : (r.mark === 'cheat' ? rest : (taken ? p.proteinKcal : 0));
     const burn = rest + gym, deficit = burn - food;
-    return { burn, gym, rest, food, foodAuto: r.food == null, gymSrc: r.gymKcal != null ? 'you' : (active != null ? 'watch' : 'auto'), restSrc: H(r, 'resting_kcal') != null ? 'watch' : 'auto', deficit, kg: deficit / p.kcalPerKg, protein: taken };
+    return { burn, gym, rest, food, foodAuto: r.food == null && meals == null, meals, gymSrc: r.gymKcal != null ? 'you' : (active != null ? 'watch' : 'auto'), restSrc: H(r, 'resting_kcal') != null ? 'watch' : 'auto', deficit, kg: deficit / p.kcalPerKg, protein: taken };
   }
 
   // ---------- main computation ----------
@@ -159,7 +160,14 @@
     $('kgStartLbl').textContent = p.startWeight + ' kg · ' + fmt(s); $('kgGoalLbl').textContent = p.goal + ' kg';
     const nd = Math.max(0, diff(s, today)), pd = nd > 0 ? lost / nd : 0;
     const dTm = st.est - st.tomorrow;
-    $('wake').textContent = 'Tomorrow morning ≈ ' + st.tomorrow.toFixed(1) + ' kg' + (Math.abs(dTm) >= 0.05 ? ' (' + (dTm > 0 ? '−' : '+') + Math.abs(dTm).toFixed(2) + ')' : '');
+    $('wake').textContent = st.tomorrow.toFixed(1) + ' kg';
+    $('wakeD').textContent = Math.abs(dTm) >= 0.05 ? (dTm > 0 ? '−' : '+') + Math.abs(dTm).toFixed(2) + ' kg overnight' : 'about the same';
+    // end of the cut-week still ahead (weeks run from your start date, like the weekly report)
+    const k = Math.max(0, diff(s, today)); let wEnd = addDays(s, Math.floor(k / 7) * 7 + 6); if (diff(today, wEnd) <= 0) wEnd = addDays(wEnd, 7);
+    const wNo = Math.floor(diff(s, wEnd) / 7) + 1, mornings = diff(today, wEnd), wkKg = st.tomorrow - Math.max(0, pd) * mornings;
+    $('wkTgtLbl').textContent = 'End of week ' + wNo;
+    $('wkTgt').textContent = (pd > 0.01 ? wkKg : st.tomorrow).toFixed(1) + ' kg';
+    $('wkTgtD').textContent = 'by ' + addDays(wEnd, 1).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' morning' + (pd > 0.01 ? ' · −' + (st.est - wkKg).toFixed(1) + ' kg' : '');
     $('perDay').textContent = pd.toFixed(2); $('perWeek').textContent = (pd * 7).toFixed(1);
     $('eta').textContent = left <= 0 ? 'Done' : (pd > 0.01 ? fmt(addDays(today, Math.ceil(left / pd))) : '–');
   }
@@ -197,6 +205,75 @@
       tb.appendChild(tr);
     }
     renderChart(st);
+    renderMilestones(st); renderMonths(st);
+  }
+
+  // ---------- milestones: every 5 kg, and the goal ----------
+  let msData = [];
+  function renderMilestones(st) {
+    const p = plan(), ids = Object.keys(st.perDay).sort(), out = [];
+    const marks = []; for (let k = 5; p.startWeight - k > p.goal + 0.01; k += 5) marks.push({ kg: k, at: p.startWeight - k, label: '−' + k });
+    marks.push({ kg: p.startWeight - p.goal, at: p.goal, label: p.goal + '', goal: true });
+    const lost = p.startWeight - st.est, nd = Math.max(1, diff(parseId(p.start), today)), pace = lost / nd;
+    marks.forEach(m => {
+      const hit = ids.find(id => st.perDay[id].morning <= m.at + 1e-9);
+      const eta = !hit && pace > 0.01 ? addDays(today, Math.ceil((st.est - m.at) / pace)) : null;
+      out.push(Object.assign({}, m, { hit, eta }));
+    });
+    msData = out;
+    const on = out.filter(m => m.hit).length;
+    $('msCount').textContent = on + ' / ' + out.length;
+    $('msList').innerHTML = out.map((m, i) => '<li class="' + (m.hit ? 'on' : '') + '"><span class="mk">' + esc(m.label) + '<br><small style="font-size:.6rem">KG</small></span><div><b>' + (m.goal ? 'Goal: ' + m.at + ' kg' : m.kg + ' kg down (' + m.at.toFixed(0) + ' kg)') + '</b><span>' +
+      (m.hit ? 'Reached ' + fmt(parseId(m.hit)) + ', day ' + (diff(parseId(p.start), parseId(m.hit)) + 1) : m.eta ? 'On pace for ' + fmt(m.eta) : 'Ahead') + '</span></div>' +
+      (m.hit ? '<button class="btn" type="button" data-ms="' + i + '">Share</button>' : '') + '</li>').join('');
+  }
+  $('msList').addEventListener('click', e => { const b = e.target.closest('[data-ms]'); if (b) shareMilestone(msData[+b.dataset.ms]); });
+  // a 1080 × 1350 card (Instagram portrait) drawn on the phone
+  async function shareMilestone(m) {
+    const p = plan(), st = last, prof = Store.profile || {}, name = prof.display_name || (prof.username ? '@' + prof.username : '');
+    try { await Promise.all(['800 100px', '700 40px', '600 54px'].map(f => document.fonts.load(f + ' "Barlow Condensed"'))); } catch (e) {}
+    const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 1350); g.addColorStop(0, '#111'); g.addColorStop(1, '#000'); x.fillStyle = g; x.fillRect(0, 0, 1080, 1350);
+    x.fillStyle = '#ff6b35'; x.fillRect(80, 120, 120, 14);
+    const F = (w, sz) => w + ' ' + sz + 'px "Barlow Condensed", "Arial Narrow", sans-serif';
+    x.fillStyle = '#fff'; x.font = F(800, 60); x.fillText('CUT LOG', 80, 100);
+    x.fillStyle = '#ff6b35'; x.font = F(800, 300); x.fillText(m.goal ? p.goal + '' : '−' + m.kg, 70, 470);
+    x.fillStyle = '#fff'; x.font = F(800, 110); x.fillText(m.goal ? 'KG. GOAL REACHED.' : 'KG DOWN', 80, 600);
+    const dayN = diff(parseId(p.start), parseId(m.hit)) + 1;
+    x.fillStyle = '#9a9a9a'; x.font = F(600, 54);
+    x.fillText(p.startWeight + ' kg → ' + st.perDay[m.hit].morning.toFixed(1) + ' kg in ' + dayN + ' day' + (dayN === 1 ? '' : 's'), 80, 700);
+    const tiles = [['Streak', st.best + ' best'], ['Bosses', st.bosses + ''], ['Sessions', st.sessions + '']];
+    tiles.forEach((t, i) => { const tx = 80 + i * 320; x.fillStyle = '#1c1c1c'; x.fillRect(tx, 790, 290, 200); x.fillStyle = '#9a9a9a'; x.font = F(700, 40); x.fillText(t[0].toUpperCase(), tx + 30, 850); x.fillStyle = '#fff'; x.font = F(800, 90); x.fillText(t[1], tx + 30, 950); });
+    x.fillStyle = '#fff'; x.font = F(800, 64); if (name) x.fillText(name.toUpperCase(), 80, 1150);
+    x.fillStyle = '#9a9a9a'; x.font = F(600, 44); x.fillText(fmt(parseId(m.hit)) + ' ' + m.hit.slice(0, 4) + ' · Run on conviction, not hope.', 80, 1220);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const file = new File([blob], 'cut-log-' + (m.goal ? 'goal' : m.kg + 'kg') + '.png', { type: 'image/png' });
+    try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Cut Log' }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  // ---------- monthly report ----------
+  function renderMonths(st) {
+    const p = plan(), s = parseId(p.start), tb = $('months'); tb.textContent = '';
+    const months = []; for (let d = new Date(s.getFullYear(), s.getMonth(), 1); d <= today; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(d);
+    months.reverse().forEach((m0, i) => {
+      const from = m0 < s ? s : m0, nextM = new Date(m0.getFullYear(), m0.getMonth() + 1, 1), to = nextM > today ? today : addDays(nextM, -1);
+      let dn = 0, ch = 0, gym = 0, n = 0; const rc = [], sl = [];
+      for (let d = new Date(from); d <= to; d = addDays(d, 1)) { const id = idOf(d), r = rec(id); n++; if (r.mark === 'done') dn++; if (r.mark === 'cheat') ch++; gym += sessOf(r); const sc = bodyScores[id]; if (sc && sc.recovery != null) rc.push(sc.recovery); if (sc && sc.sleep != null) sl.push(sc.sleep); }
+      const a = st.perDay[idOf(from)] ? st.perDay[idOf(from)].morning : p.startWeight, b = nextM > today ? st.est : (st.perDay[idOf(addDays(to, 1))] || st.perDay[idOf(to)] || {}).morning;
+      const avg = x => x.reduce((q, v) => q + v, 0) / x.length;
+      const tr = document.createElement('tr'); if (!i) tr.className = 'cur';
+      tr.innerHTML = '<td><div class="wk"></div><small></small></td><td></td><td></td><td></td><td></td><td></td>';
+      tr.querySelector('.wk').textContent = MONTHS[m0.getMonth()].slice(0, 3) + ' ' + String(m0.getFullYear()).slice(2);
+      tr.querySelector('small').textContent = fmt(from) + ' – ' + fmt(to);
+      const td = tr.querySelectorAll('td');
+      td[1].textContent = dn + '/' + n + (ch ? ' · ' + ch + '✕' : '');
+      td[2].textContent = gym;
+      td[3].textContent = b != null ? (a - b >= 0 ? '−' : '+') + Math.abs(a - b).toFixed(1) + ' kg' : '–';
+      td[4].textContent = rc.length ? Math.round(avg(rc)) + '%' : '–';
+      td[5].textContent = sl.length ? avg(sl).toFixed(1) + ' h' : '–';
+      tb.appendChild(tr);
+    });
   }
 
   function renderChart(st) {
@@ -222,7 +299,26 @@
     g += '<circle cx="' + x(idOf(addDays(today, 0))) + '" cy="' + y(st.est) + '" r="4" fill="var(--primary)"/>';
     $('chart').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Weight estimate from ' + p.startWeight + ' kg to ' + st.est.toFixed(1) + ' kg this morning, goal ' + p.goal + ' kg">' + g + '</svg>';
     $('chartRange').textContent = st.weighIns.length + ' weigh-in' + (st.weighIns.length === 1 ? '' : 's');
+    renderBodyFat(p);
     void endV;
+  }
+
+  // body fat from the smart scale (Apple Health), toward the body-fat goal
+  function renderBodyFat(p) {
+    const pts = Object.keys(days()).filter(id => H(rec(id), 'body_fat') != null).sort().map(id => ({ id, v: H(rec(id), 'body_fat'), lean: H(rec(id), 'lean_kg'), w: weightOf(rec(id)) }));
+    $('bfBox').hidden = !pts.length; $('bfEmpty').hidden = !!pts.length;
+    if (!pts.length) return;
+    const first = pts[0], last = pts[pts.length - 1], goal = p.bfGoal || 15;
+    $('bfNow').textContent = last.v.toFixed(1) + '%';
+    $('bfWhen').textContent = 'Scale ' + fmt(parseId(last.id));
+    const ch = last.v - first.v;
+    $('bfSub').textContent = pts.length > 1 ? (ch <= 0 ? '−' : '+') + Math.abs(ch).toFixed(1) + ' since ' + fmt(parseId(first.id)) : 'first reading';
+    $('bfFill').style.width = Math.max(0, Math.min(100, first.v > goal ? (first.v - last.v) / (first.v - goal) * 100 : 100)) + '%';
+    $('bfStart').textContent = first.v.toFixed(1) + '% · ' + fmt(parseId(first.id)); $('bfGoalLbl').textContent = 'under ' + goal + '%';
+    const w = last.w != null ? last.w : null, fatKg = w != null ? w * last.v / 100 : null, lean = last.lean != null ? last.lean : (w != null ? w - fatKg : null);
+    // weight you'd be at the goal body fat, keeping today's lean mass
+    const atGoal = lean != null ? lean / (1 - goal / 100) : null;
+    $('bfTiles').innerHTML = '<div><b>' + (fatKg != null ? fatKg.toFixed(1) : '–') + '</b><span>kg of fat</span></div><div><b>' + (lean != null ? lean.toFixed(1) : '–') + '</b><span>kg lean mass</span></div><div><b>' + (atGoal != null ? atGoal.toFixed(1) : '–') + '</b><span>kg at ' + goal + '% (same muscle)</span></div>';
   }
 
   // ---------- render: badges ----------
@@ -302,7 +398,8 @@
 
     const en = energy(sel, r, st.prot), sess = sessOf(r);
     $('fGym').placeholder = H(r, 'active_kcal') != null ? kfmt(H(r, 'active_kcal')) + ' (watch)' : (sess ? kfmt(sess * p.sessionKcal) + ' (auto)' : kfmt(p.sessionKcal) + ' a session');
-    $('fFood').placeholder = (r.mark === 'cheat' ? kfmt(en ? en.rest : p.baseBurn) : (taken ? kfmt(p.proteinKcal) : '0')) + ' (auto)';
+    $('fFood').placeholder = en && en.meals != null ? kfmt(en.food) + ' (meals)' : (r.mark === 'cheat' ? kfmt(en ? en.rest : p.baseBurn) : (taken ? kfmt(p.proteinKcal) : '0')) + ' (auto)';
+    renderMeals(r);
     const e = $('energy');
     const extra = [];
     if (H(r, 'steps') != null) extra.push(kfmt(H(r, 'steps')) + ' steps');
@@ -321,6 +418,7 @@
   }
 
   function render() {
+    bodyScores = window.CutHealth ? CutHealth.compute(days()) : {};
     last = compute();
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
     renderWatchToday(); renderSafe(); renderSetup(); renderBody(); renderToday(last); renderWeek(last);
@@ -333,7 +431,8 @@
     shake: '<path d="M9 3h6v3l2 3v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9l2-3z"/>',
     scale: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.5"/>',
     watch: '<rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 10v2.2l1.4 1"/>',
-    log: '<path d="M7 4h10v16H7z"/><path d="M10 9h4M10 13h4"/>'
+    log: '<path d="M7 4h10v16H7z"/><path d="M10 9h4M10 13h4"/>',
+    lift: '<path d="M3 12h18M6 8v8M18 8v8M3 10v4M21 10v4"/>'
   };
   const dayName = d => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   let agendaActs = {};
@@ -343,6 +442,10 @@
     const h = new Date().getHours();
     const hi = h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
     $('hello').textContent = hi + (name ? ', ' + name : '');
+    const nm = prof.display_name || prof.username || '';
+    $('meChip').hidden = !Store.user; $('meInit').textContent = nm ? nm.replace(/^@/, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2) : '•';
+    $('meChip').title = prof.display_name ? prof.display_name + (prof.username ? ' (@' + prof.username + ')' : '') : (prof.username ? '@' + prof.username : 'Your profile');
+    $('badgeTitle').textContent = prof.display_name ? prof.display_name.split(/\s+/)[0] + '’s badges' : 'Badges';
     $('todayDate').textContent = dayName(today);
     const autoOn = p.autopilot !== false && !!Store.user, started = tId >= p.start, items = []; agendaActs = {};
     const hm = String(p.autoHour != null ? p.autoHour : 12).padStart(2, '0') + ':00';
@@ -352,6 +455,10 @@
       else if (autoOn) items.push(['auto', IC.auto, 'Autopilot has today', 'Completes at ' + hm + ' tomorrow. Only a cheat needs a tap.', 'Cheat day', () => setMark(tId, 'cheat')]);
       else items.push(['', IC.log, 'Log today', st.run ? 'Make it ' + (st.run + 1) + ' in a row.' : 'Start the run.', 'Complete', () => setMark(tId, 'done')]);
       if (y.auto && y.mark === 'done' && yId >= p.start) items.push(['', IC.auto, 'Yesterday auto-completed', 'Was it a cheat day?', 'Mark cheat', () => setMark(yId, 'cheat')]);
+    }
+    if (started && window.CutHealth && CutHealth.train) {
+      const tp = CutHealth.train(bodyScores[tId] || {});
+      items.push([tp.key === 'green' ? 'ok' : tp.key === 'red' ? 'warn' : 'prot', IC.lift, 'Training: ' + tp.name, 'Strain target ' + tp.lo + '–' + tp.hi + (tp.strain != null ? ' · now ' + tp.strain.toFixed(1) + (tp.status === 'hit' ? ', target reached' : tp.status === 'over' ? ', over' : '') : ' · ' + tp.am[0]), 'Plan', () => show('body')]);
     }
     const pr = st.prot[tId];
     const next = Object.keys(st.prot).filter(id => id > tId && st.prot[id].taken).sort()[0];
@@ -366,8 +473,11 @@
     if (lw && Date.now() - Date.parse(lw) > 36 * 3600e3) items.push(['warn', IC.watch, 'Watch sync paused', 'Nothing since ' + ago(lw) + '. Run the Shortcut once.', 'Sync', () => { location.href = 'shortcuts://run-shortcut?name=Cut%20Log%20Sync'; }]);
     $('agenda').innerHTML = items.map(([c, ic, t, sub, btn], i) => { if (btn) agendaActs[i] = items[i][5];
       return '<li><span class="ic ' + c + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ic + '</svg></span><div><b>' + esc(t) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>' + (btn ? '<button class="btn" type="button" data-ag="' + i + '">' + esc(btn) + '</button>' : '') + '</li>'; }).join('');
-    $('todayCard').hidden = !items.length && !name;
+    $('todayCard').hidden = false;
   }
+  $('homeMeal').addEventListener('click', () => { sel = idOf(today); $('mealInput').click(); show('log'); });
+  $('homeBody').addEventListener('click', () => show('body'));
+  $('meChip').addEventListener('click', () => { show('settings'); setTimeout(() => { $('acct').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); });
   $('agenda').addEventListener('click', e => { const b = e.target.closest('[data-ag]'); if (b && agendaActs[b.dataset.ag]) agendaActs[b.dataset.ag](); });
 
   // ---------- Home: last 7 days (the same numbers as the Sunday brief) ----------
@@ -397,7 +507,6 @@
   // ---------- Body today (Whoop-style) + history ----------
   let bodyScores = {};
   function renderWatchToday() {
-    bodyScores = window.CutHealth ? CutHealth.compute(days()) : {};
     const CH = window.CutHealth, tId = idOf(today), yId = idOf(addDays(today, -1));
     const pick = [tId, yId].find(id => days()[id] && days()[id].health);
     $('bodyToday').hidden = !CH || !pick;
@@ -651,9 +760,68 @@
     const fill = (sel, val) => { const s = $(sel); s.innerHTML = keys.length ? keys.map(k => '<option value="' + k + '">' + esc(weekLabel(k)) + '</option>').join('') : '<option value="">No photos yet</option>'; if (val) s.value = val; };
     fill('photoA', keys[0]); fill('photoB', keys[keys.length - 1]);
     showPhoto('photoAImg', keys[0]); showPhoto('photoBImg', keys[keys.length - 1]);
+    renderCmp();
   }
-  $('photoA').addEventListener('change', () => showPhoto('photoAImg', $('photoA').value));
-  $('photoB').addEventListener('change', () => showPhoto('photoBImg', $('photoB').value));
+  $('photoA').addEventListener('change', () => { showPhoto('photoAImg', $('photoA').value); renderCmp(); });
+  $('photoB').addEventListener('change', () => { showPhoto('photoBImg', $('photoB').value); renderCmp(); });
+  // compare: side by side, a slider that wipes from then to now, or a fade
+  let pmode = 'side'; try { pmode = localStorage.getItem('cutlog-pmode') || 'side'; } catch (e) {}
+  async function renderCmp() {
+    $('photoMode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pm === pmode)));
+    const side = pmode === 'side';
+    document.querySelector('#tab-stats .photos').hidden = !side; $('photoCmp').hidden = side;
+    if (side) return;
+    const a = $('photoA').value, b = $('photoB').value;
+    for (const [img, key] of [['cmpA', a], ['cmpB', b]]) {
+      let blob = null; try { blob = key ? await Store.getPhoto(key) : null; } catch (e) {}
+      if (urls[img]) URL.revokeObjectURL(urls[img]); urls[img] = blob ? URL.createObjectURL(blob) : '';
+      $(img).src = urls[img] || ''; $(img).hidden = !blob;
+    }
+    $('cmpTagA').textContent = a ? weekLabel(a).split(' · ')[0] : 'Then'; $('cmpTagB').textContent = b ? weekLabel(b).split(' · ')[0] : 'Now';
+    applyCmp();
+  }
+  function applyCmp() {
+    const v = +$('cmpRange').value;
+    if (pmode === 'slide') { $('cmpB').style.clipPath = 'inset(0 0 0 ' + v + '%)'; $('cmpB').style.opacity = 1; $('cmpLine').hidden = false; $('cmpLine').style.left = 'calc(' + v + '% - 1px)'; }
+    else { $('cmpB').style.clipPath = 'none'; $('cmpB').style.opacity = v / 100; $('cmpLine').hidden = true; }
+  }
+  $('cmpRange').addEventListener('input', applyCmp);
+  $('photoMode').addEventListener('click', e => { const b = e.target.closest('[data-pm]'); if (!b) return; pmode = b.dataset.pm; try { localStorage.setItem('cutlog-pmode', pmode); } catch (er) {} renderCmp(); });
+
+  // camera with last week's photo as a ghost, and a 3-second timer
+  let camStream = null, camFacing = 'user', camTimer = true;
+  async function camStart() {
+    if (camStream) camStream.getTracks().forEach(t => t.stop());
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: camFacing, width: { ideal: 1440 }, height: { ideal: 1920 } }, audio: false });
+    const v = $('camVideo'); v.srcObject = camStream; v.classList.toggle('mirror', camFacing === 'user'); await v.play().catch(() => {});
+  }
+  function camStop() { if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; $('cam').hidden = true; }
+  $('camOpen').addEventListener('click', async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('photoInput').click(); return; }
+    let keys = []; try { keys = await Store.photoKeys(); } catch (e) {}
+    const prev = keys.filter(k => k !== weekKey(today)).pop() || keys[keys.length - 1];
+    const g = $('camGhost'); g.hidden = true;
+    if (prev) { try { const b = await Store.getPhoto(prev); if (b) { if (urls.ghost) URL.revokeObjectURL(urls.ghost); urls.ghost = URL.createObjectURL(b); g.src = urls.ghost; g.hidden = false; } } catch (e) {} }
+    $('camHint').textContent = prev ? 'Line up with ' + weekLabel(prev).split(' · ')[0] + '’s ghost' : 'First photo: stand where you can repeat it each week';
+    $('cam').hidden = false;
+    try { await camStart(); } catch (e) { camStop(); toast('Camera not available here. Choose a photo instead.'); $('photoInput').click(); }
+  });
+  $('camClose').addEventListener('click', camStop);
+  $('camFlip').addEventListener('click', () => { camFacing = camFacing === 'user' ? 'environment' : 'user'; camStart().catch(() => {}); });
+  $('camTimer').addEventListener('click', () => { camTimer = !camTimer; $('camTimer').setAttribute('aria-pressed', String(camTimer)); });
+  $('camGhostOp').addEventListener('input', () => { $('camGhost').style.opacity = $('camGhostOp').value / 100; });
+  $('camShoot').addEventListener('click', async () => {
+    const v = $('camVideo'); if (!v.videoWidth) return;
+    if (camTimer) for (let n = 3; n > 0; n--) { $('camCount').hidden = false; $('camCount').textContent = n; await new Promise(r => setTimeout(r, 1000)); }
+    $('camCount').hidden = true;
+    const c = document.createElement('canvas'), sc = Math.min(1, 1280 / Math.max(v.videoWidth, v.videoHeight));
+    c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+    const x = c.getContext('2d'); if (camFacing === 'user') { x.translate(c.width, 0); x.scale(-1, 1); } x.drawImage(v, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    camStop();
+    if (!blob) { toast('Couldn’t take the photo.'); return; }
+    await Store.putPhoto(weekKey(today), blob); toast('Photo saved for ' + esc(weekLabel(weekKey(today)))); renderPhotos();
+  });
   $('photoInput').addEventListener('change', async () => {
     const f = $('photoInput').files[0]; if (!f) return;
     try {
@@ -673,8 +841,61 @@
     });
   }
 
+  // ---------- meals: photo → on-phone food recognition → kcal ----------
+  (function fillFoods() { const dl = $('foodList'); (window.CUT_FOODS || []).forEach(f => { const o = document.createElement('option'); o.value = f[0]; dl.appendChild(o); }); })();
+  const foodByName = n => (window.CUT_FOODS || []).find(f => f[0] === String(n || '').trim().toLowerCase());
+  function renderMeals(r) {
+    const ms = Array.isArray(r.meals) ? r.meals : [];
+    $('mealList').innerHTML = ms.map((m, i) => '<li><span>' + esc(m.n) + '</span><small>' + (m.t ? esc(m.t) + ' · ' : '') + kfmt(m.k) + ' kcal</small><button type="button" data-meal-del="' + i + '" aria-label="Remove ' + esc(m.n) + '">✕</button></li>').join('');
+    $('mealTotal').textContent = ms.length ? kfmt(ms.reduce((a, m) => a + (+m.k || 0), 0)) + ' kcal' : 'none logged';
+  }
+  let mealBase = null, mealGuessToken = 0;
+  function mealFill(name, base, serving) {
+    $('mealName').value = name; mealBase = base;
+    $('mealKcal').value = base != null ? Math.round(base * +$('mealPortion').value / 10) * 10 : '';
+    $('mealServing').textContent = serving ? 'Regular = ' + serving + ', about ' + kfmt(base) + ' kcal. Change the portion or type your own number.' : '';
+  }
+  function mealOpen(photo) {
+    $('mealBox').hidden = false; $('mealPrev').hidden = !photo; $('mealGuess').innerHTML = ''; $('mealPortion').value = '1'; mealFill('', null, '');
+    setTimeout(() => { $('mealBox').scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!photo) $('mealName').focus(); }, 50);
+  }
+  $('mealSnap').addEventListener('click', () => $('mealInput').click());
+  $('mealType').addEventListener('click', () => mealOpen(false));
+  $('mealCancel').addEventListener('click', () => { $('mealBox').hidden = true; mealGuessToken++; });
+  $('mealPortion').addEventListener('change', () => { if (mealBase != null) $('mealKcal').value = Math.round(mealBase * +$('mealPortion').value / 10) * 10; });
+  $('mealName').addEventListener('input', () => { const f = foodByName($('mealName').value); if (f) mealFill(f[0], f[1], f[2]); else mealBase = null; });
+  $('mealGuess').addEventListener('click', e => { const b = e.target.closest('[data-food]'); if (!b) return; const f = foodByName(b.dataset.food); if (f) mealFill(f[0], f[1], f[2]); $('mealGuess').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  $('mealInput').addEventListener('change', async () => {
+    const f = $('mealInput').files[0]; $('mealInput').value = ''; if (!f) return;
+    mealOpen(true); const tok = ++mealGuessToken;
+    if (urls.meal) URL.revokeObjectURL(urls.meal); urls.meal = URL.createObjectURL(f); $('mealImg').src = urls.meal;
+    const stat = t => { if (tok === mealGuessToken) $('mealStatus').textContent = t; };
+    stat('Looking at your plate…');
+    try {
+      const small = await shrink(f, 640, 0.85);
+      const F = await import('./food/food.js');
+      const first = !(await F.cached());
+      if (first) stat('Getting the food recogniser ready (one time, about 64 MB)…');
+      const res = await F.guess(small, (frac) => stat('Downloading the food recogniser: ' + Math.round(frac * 100) + '% (one time)'));
+      if (tok !== mealGuessToken) return;
+      $('mealGuess').innerHTML = res.top.slice(0, 3).map((g, i) => '<button type="button" data-food="' + esc(g.name) + '" aria-pressed="' + (i === 0 && res.food) + '">' + esc(g.name) + ' · ' + kfmt(g.kcal) + '</button>').join('');
+      if (res.food) { mealFill(res.top[0].name, res.top[0].kcal, res.top[0].serving); stat('Looks like ' + res.top[0].name + '. Not right? Tap another or type it.'); }
+      else stat('Couldn’t spot food in that photo. Type what it is.');
+    } catch (e) { console.error(e); stat(navigator.onLine ? 'Recognition didn’t work on this phone. Type what it is.' : 'Offline: type what it is (recognition needs one download first).'); }
+  });
+  $('mealAdd').addEventListener('click', () => {
+    const n = $('mealName').value.trim(), k = num($('mealKcal').value);
+    if (!n) { $('mealName').focus(); toast('Say what it is first.'); return; }
+    if (k == null || k < 0) { $('mealKcal').focus(); toast('Add the calories (or pick a food from the list).'); return; }
+    const now = new Date(), t = sel === idOf(today) ? pad(now.getHours()) + ':' + pad(now.getMinutes()) : '';
+    const portion = $('mealPortion').selectedOptions[0].textContent;
+    change(sel, r => { r.meals = (Array.isArray(r.meals) ? r.meals.slice() : []).concat([{ n: n + (portion !== 'Regular' ? ' (' + portion.toLowerCase() + ')' : ''), k: Math.round(k), t }]); }, 'Meal logged · ' + kfmt(k) + ' kcal');
+    $('mealBox').hidden = true; mealGuessToken++;
+  });
+  $('mealList').addEventListener('click', e => { const b = e.target.closest('[data-meal-del]'); if (!b) return; const i = +b.dataset.mealDel; change(sel, r => { const m = (r.meals || []).slice(); m.splice(i, 1); r.meals = m.length ? m : null; }, 'Meal removed'); });
+
   // ---------- settings ----------
-  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't']];
+  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't'], ['sBf', 'bfGoal']];
   function renderSettings() {
     const p = plan();
     SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k] != null ? p[k] : ''; });
@@ -682,7 +903,8 @@
     const cfg = !!Store.connected, u = Store.user, anon = Store.isAnonymous;
     $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon || showSignIn;
     if (u && !anon) {
-      $('aWho').textContent = u.email || 'you';
+      const pr = Store.profile || {};
+      $('aWho').textContent = (pr.display_name ? pr.display_name + (pr.username ? ' (@' + pr.username + ')' : '') + ' · ' : (pr.username ? '@' + pr.username + ' · ' : '')) + (u.email || 'you');
       const pk = Store.passkeys;
       $('pkOffer').hidden = pk.length > 0; $('pkOn').hidden = !pk.length;
       $('pkNames').textContent = pk.length ? ' (' + pk.map(x => x.friendly_name || x.friendlyName || 'passkey').join(', ') + ')' : '';
@@ -851,9 +1073,19 @@
     try {
       const t = await Store.getHealthToken();
       watchLink = Store.healthLink(t);
-      $('wLink').textContent = watchLink; $('wHead').textContent = Store.healthHeader();
+      $('wLink').textContent = watchLink; $('wHead').textContent = Store.healthHeader(); $('pLink').textContent = watchLink.replace('action=health', 'action=ping');
     } catch (e) { $('wLink').textContent = 'Couldn’t load your link. Check you’re online.'; }
   }
+  const copyText = async (t, ok) => { try { await navigator.clipboard.writeText(t); toast(ok); } catch (e) { toast('Copy didn’t work here: press and hold the text instead.'); } };
+  // iPhone only allows copying straight from the tap, so the script is fetched ahead of time
+  let widgetTpl = null;
+  const loadWidgetTpl = () => { if (!widgetTpl) fetch('widget/cut-log-widget.js', { cache: 'no-cache' }).then(r => r.ok ? r.text() : null).then(t => { widgetTpl = t; }).catch(() => {}); };
+  $('widgetCopy').addEventListener('click', () => {
+    if (!watchLink || !widgetTpl) { loadWidgetTpl(); loadWatchLink(true); toast('Getting your widget ready. Tap again in a second.'); return; }
+    copyText(widgetTpl.replace('__LINK__', watchLink.replace('action=health', 'action=widget')).replace('__AUTH__', Store.healthHeader()), 'Widget script copied. Paste it into Scriptable.');
+  });
+  $('pCopy').addEventListener('click', () => { if (watchLink) copyText(watchLink.replace('action=health', 'action=ping'), 'Phone-use link copied'); });
+  $('pCopyHead').addEventListener('click', () => copyText(Store.healthHeader(), 'Header copied'));
   $('wNew').addEventListener('click', () => { wConfirmAct = 'new'; $('wConfirmText').textContent = 'Make a new link? The old one stops working, so you’ll need to paste the new one into your Shortcut.'; $('wConfirm').hidden = false; });
   $('wDel').addEventListener('click', () => { wConfirmAct = 'del'; $('wConfirmText').textContent = 'Delete your link? Your Shortcut stops sending until you make a new one.'; $('wConfirm').hidden = false; });
   $('wNo').addEventListener('click', () => { wConfirmAct = null; $('wConfirm').hidden = true; });
@@ -901,6 +1133,7 @@
     const u = Store.user, lastW = watchLast();
     $('watchNeedsText').textContent = !Store.connected ? 'Connects once the database is set up.' : 'Sign in to sync first. The Shortcut sends data to your private database.';
     $('watchNeedsAcct').hidden = !!u; $('watchReady').hidden = !u;
+    $('widgetNeeds').hidden = !!u; $('widgetReady').hidden = !u; if (u) loadWidgetTpl();
     if (u) loadWatchLink(false); else watchLink = '';
     $('watchStatus').textContent = lastW ? 'Last sync ' + ago(lastW) : 'Not connected';
     $('wRun').hidden = !lastW;

@@ -92,6 +92,18 @@
     if (s.tempDev != null && s.tempDev >= 0.5) flags.push('Wrist temperature was ' + s.tempDev + '°C above your normal overnight.');
     $('bdRecNote').hidden = !flags.length; $('bdRecNote').textContent = flags.join(' ');
 
+    // today's training plan (only for today: it's a plan, not a record)
+    $('bdTrain').hidden = sel !== today || !CH.train;
+    if (sel === today && CH.train) {
+      const tp = CH.train(s), pc = v => (v / 21 * 100).toFixed(1) + '%';
+      $('trName').textContent = tp.name; $('trTarget').textContent = 'Strain ' + tp.lo + '–' + tp.hi;
+      $('trBar').innerHTML = '<div class="tbar" role="img" aria-label="Strain target ' + tp.lo + ' to ' + tp.hi + '"><i class="tband" style="left:' + pc(tp.lo) + ';width:' + pc(tp.hi - tp.lo) + '"></i>' + (tp.strain != null ? '<i class="tnow" style="left:' + pc(Math.min(21, tp.strain)) + '"></i>' : '') + '</div>' +
+        '<div class="tlab"><span>' + (tp.strain != null ? 'Now ' + h1(tp.strain) : 'Not started') + '</span><span>' + (tp.status === 'hit' ? 'Target reached: you can stop here' : tp.status === 'over' ? 'Over target: easy tomorrow' : tp.strain != null ? (tp.lo - tp.strain).toFixed(1) + ' to go' : '') + '</span></div>';
+      $('trWhy').textContent = tp.why;
+      const card = (lbl, x) => '<div><small>' + lbl + '</small><b>' + esc(x[0]) + '</b><ul>' + x[1].map(i => '<li>' + esc(i) + '</li>').join('') + '</ul></div>';
+      $('trSessions').innerHTML = card('Session 1', tp.am) + card('Session 2', tp.pm);
+    }
+
     // strain
     $('bdStrainVal').textContent = s.strain != null ? h1(s.strain) + (s.strainEst ? ' est.' : '') : '';
     if (co) {
@@ -115,6 +127,9 @@
     const t = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
     const kv = [];
     if (s.sleep != null) kv.push(['Asleep', hrs(s.sleep) + ' of ' + hrs(s.need)]);
+    if (s.sleepSrc === 'capped') kv.push(['Corrected by phone use', 'Health said ' + hrs(s.sleepRaw) + ', but your phone was in use']);
+    if (s.sleepSrc === 'phone') kv.push(['Source', 'Phone use (Watch was off)']);
+    if (h.phone_bed_ms && h.phone_wake_ms && !(h.bed_ms && h.wake_ms)) kv.push(['Phone down → picked up', t(h.phone_bed_ms) + ' → ' + t(h.phone_wake_ms)]);
     if (h.bed_ms && h.wake_ms) kv.push(['Fell asleep → woke', t(h.bed_ms) + ' → ' + t(h.wake_ms)]);
     if (plan.debt != null && s.sleep != null) kv.push(['Sleep debt, last 7 days', plan.debt > 0.1 ? hrs(plan.debt) : 'None']);
     if (plan.consistency != null) kv.push(['Consistency', plan.consistency + '%']);

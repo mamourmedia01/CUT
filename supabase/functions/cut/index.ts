@@ -8,6 +8,8 @@
 //                               in a private table, so nothing ever has to be copied or pasted)
 //   POST ?action=test           body {endpoint}: send a test push to that one phone
 //   POST ?action=login          body {username, password}: sign in with a username (returns a session)
+//   GET  ?action=ping&k=KEY     the phone was used just now (Shortcut automation): for sleep without the Watch
+//   GET  ?action=widget&k=KEY   today's numbers for the lock-screen widget (Scriptable)
 
 const APP_PATH = './#log';
 const CONTACT = 'mailto:mamourmedia01@gmail.com';
@@ -112,10 +114,36 @@ export function dayKg(plan, r, protein) {
   if (!r.mark && !sess && r.food == null && r.gymKcal == null) return null;
   const gym = r.gymKcal != null ? r.gymKcal : (H(r, 'active_kcal') != null ? H(r, 'active_kcal') : sess * plan.sessionKcal);
   const rest = H(r, 'resting_kcal') != null ? H(r, 'resting_kcal') : plan.baseBurn;
-  const food = r.food != null ? r.food : (r.mark === 'cheat' ? rest : (protein ? plan.proteinKcal : 0));
+  const meals = Array.isArray(r.meals) && r.meals.length ? r.meals.reduce((a, m) => a + (+m.k || 0), 0) : null;
+  const food = r.food != null ? r.food : meals != null ? meals + (protein ? plan.proteinKcal : 0) : (r.mark === 'cheat' ? rest : (protein ? plan.proteinKcal : 0));
   return (rest + gym - food) / plan.kcalPerKg;
 }
 const merge = (days, health) => { const o = {}; new Set([...Object.keys(days), ...Object.keys(health)]).forEach(id => { o[id] = Object.assign({}, days[id] || {}, health[id] ? { health: health[id] } : {}); }); return o; };
+
+// The app's weight estimate: from the start weight, each day's deficit comes off the next morning;
+// a weigh-in (typed or from the scale) resets it.
+export function estimate(planIn, all, todayId) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {});
+  const prot = proteinDays(plan, all, todayId);
+  let est = +plan.startWeight || 0, morning = est, weighed = null;
+  for (let n = toN(plan.start); n <= toN(todayId); n++) {
+    const id = toId(n), r = all[id] || {};
+    const w = r.weight != null ? +r.weight : H(r, 'weight_kg');
+    if (w != null) { est = w; weighed = id; }
+    morning = est;
+    const kg = dayKg(plan, r, !!prot[id]); if (kg != null) est -= kg;
+  }
+  const days = Math.max(1, toN(todayId) - toN(plan.start));
+  return { morning, tomorrow: est, weighed, pace: (plan.startWeight - morning) / days };
+}
+// end of the cut-week (weeks run from the start date) that is still ahead, and the weight there at the current pace
+export function weekTarget(planIn, all, todayId) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), e = estimate(plan, all, todayId);
+  const k = toN(todayId) - toN(plan.start); let end = toN(plan.start) + Math.floor(k / 7) * 7 + 6;
+  if (end <= toN(todayId)) end += 7;
+  const left = end - toN(todayId); // mornings after tomorrow until the morning after `end`
+  return { endId: toId(end), kg: e.tomorrow - Math.max(0, e.pace) * left, est: e };
+}
 
 // Morning: recovery (once today's HRV is in), protein day, Sunday check-in.
 export function morningPush(planIn, days, health, prefs, now, opts = {}) {
@@ -142,6 +170,7 @@ export function eveningPush(planIn, days, health, prefs, now) {
   if (dayNo < 1) return null;
   const bits = [], sess = sessOf(r), act = H(r, 'active_kcal'), steps = H(r, 'steps');
   if (sess) bits.push(sess === 2 ? 'Double session' : '1 session');
+  if (Array.isArray(r.meals) && r.meals.length) bits.push(r.meals.length + ' meal' + (r.meals.length > 1 ? 's' : '') + ' logged');
   if (act != null) bits.push(kf(act) + ' active kcal');
   if (steps != null) bits.push(kf(steps) + ' steps');
   const kg = dayKg(plan, Object.assign({}, r, { mark: r.mark || (plan.autopilot !== false ? 'done' : null) }), !!prot[now.id]);
@@ -159,7 +188,7 @@ export function eveningPush(planIn, days, health, prefs, now) {
 }
 
 // Sunday evening: the week in one push (the same numbers as the brief on Home).
-export function weeklyBrief(planIn, days, health, now, lastImport) {
+export function weeklyBrief(planIn, days, health, now, lastImport, name) {
   const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), all = merge(days, health);
   const ids = []; for (let i = 6; i >= 0; i--) ids.push(toId(toN(now.id) - i));
   const prev = []; for (let i = 13; i >= 7; i--) prev.push(toId(toN(now.id) - i));
@@ -177,7 +206,35 @@ export function weeklyBrief(planIn, days, health, now, lastImport) {
   if (h.length) lines.push(h.join(', ') + '.');
   if (next) lines.push('Next shake ' + niceId(next) + '.');
   if (!lastImport || Date.now() - Date.parse(lastImport) > 8 * 864e5) lines.push('Tip: refresh your Health history for sleep stages.');
-  return { title: 'Your week in review', body: lines.join(' '), url: './#home', tag: 'weekly', stats: { done, cheats, sess, kg, shakes, rec, recP, sl, hrv, next } };
+  const wt = weekTarget(plan, all, now.id); lines.push('This week’s target: ' + wt.kg.toFixed(1) + ' kg by ' + niceId(toId(toN(wt.endId) + 1)) + '.');
+  return { title: (name ? name + ', your' : 'Your') + ' week in review', body: lines.join(' '), url: './#home', tag: 'weekly', stats: { done, cheats, sess, kg, shakes, rec, recP, sl, hrv, next } };
+}
+
+// 1st of the month: last month in one push.
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export function monthlyBrief(planIn, days, health, now, name) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), all = merge(days, health);
+  const first = toN(now.id.slice(0, 8) + '01'), prevFirst = toN(toId(first - 1).slice(0, 8) + '01');
+  const from = Math.max(prevFirst, toN(plan.start)); if (from >= first) return null;
+  const prot = proteinDays(plan, all, toId(first)), sc = compute(all);
+  let done = 0, cheats = 0, sess = 0, shakes = 0; const rec = [], sl = [];
+  for (let n = from; n < first; n++) { const id = toId(n), r = all[id] || {}; if (r.mark === 'done') done++; if (r.mark === 'cheat') cheats++; sess += sessOf(r); if (prot[id]) shakes++; if (sc[id] && sc[id].recovery != null) rec.push(sc[id].recovery); if (sc[id] && sc[id].sleep != null) sl.push(sc[id].sleep); }
+  const a = estimate(plan, all, toId(from)).morning, b = estimate(plan, all, now.id).morning;
+  const m = MONTHS_LONG[+toId(prevFirst).slice(5, 7) - 1], avg = x => x.reduce((p, v) => p + v, 0) / x.length;
+  const lines = [done + '/' + (first - from) + ' days completed' + (cheats ? ', ' + cheats + ' cheat' + (cheats > 1 ? 's' : '') : '') + ' · ' + sess + ' sessions · ' + shakes + ' shakes.',
+    (a - b >= 0 ? '−' : '+') + Math.abs(a - b).toFixed(1) + ' kg (' + a.toFixed(1) + ' → ' + b.toFixed(1) + ').'];
+  if (rec.length) lines.push('Recovery ' + Math.round(avg(rec)) + '%' + (sl.length ? ', sleep ' + avg(sl).toFixed(1) + ' h' : '') + '.');
+  return { title: (name ? name + ', ' : '') + m + ' in review', body: lines.join(' '), url: './#stats', tag: 'monthly' };
+}
+// Every 5 kg off the start weight (and the goal itself) gets its own moment.
+export function milestone(planIn, all, todayId, doneCount, name) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), e = estimate(plan, all, todayId);
+  const lost = plan.startWeight - e.morning, reached = Math.max(0, Math.floor(lost / 5)), goal = e.morning <= plan.goal;
+  const count = reached + (goal ? 1 : 0);
+  if (count <= (doneCount || 0)) return { count, msg: null };
+  const msg = goal ? { title: (name ? name + ', ' : '') + 'goal reached: ' + plan.goal + ' kg', body: 'From ' + plan.startWeight + ' kg to ' + e.morning.toFixed(1) + ' kg. Open Cut Log to share your card.', url: './#stats', tag: 'milestone' }
+    : { title: reached * 5 + ' kg down' + (name ? ', ' + name : ''), body: plan.startWeight + ' → ' + e.morning.toFixed(1) + ' kg. ' + Math.max(0, e.morning - plan.goal).toFixed(1) + ' kg to ' + plan.goal + '. Your milestone card is in Stats.', url: './#stats', tag: 'milestone' };
+  return { count, msg };
 }
 
 // The Watch has gone quiet: the Shortcut automation probably stopped (iOS sometimes asks again after updates).
@@ -208,6 +265,15 @@ const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const num = v => typeof v === 'number' && isFinite(v) ? v : null;
 const dayN = id => Date.UTC(+id.slice(0, 4), +id.slice(5, 7) - 1, +id.slice(8, 10)) / 864e5;
+// Sleep you actually got: the Watch's number, capped by phone use (you can't be asleep while using
+// your phone); with the Watch off (charging), the longest phone-free stretch. Same as health.js.
+export function sleepOf(h) {
+  if (!h) return null;
+  const raw = num(h.sleep_h), cap = num(h.sleep_cap_h), ph = num(h.sleep_phone_h);
+  if (raw != null) return cap != null && raw > cap + 0.25 ? { v: ph != null ? ph : cap, src: 'capped', raw } : { v: raw, src: 'watch' };
+  if (ph != null) return { v: ph, src: 'phone' };
+  return null;
+}
 
 function strainOf(h) {
   if (!h) return null;
@@ -228,7 +294,8 @@ function compute(days) {
     const h = days[id].health, n = dayN(id), o = {};
     const s = strainOf(h); if (s) { o.strain = Math.round(s.v * 10) / 10; o.strainEst = s.est; }
     const need = 8 + (prevStrain != null && prevN === n - 1 ? Math.max(0, prevStrain - 10) * 0.06 : 0);
-    if (num(h.sleep_h) != null) { o.sleep = h.sleep_h; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, h.sleep_h / need)); }
+    const sl = sleepOf(h);
+    if (sl) { o.sleep = sl.v; o.sleepSrc = sl.src; o.need = need; o.sleepPerf = Math.round(100 * Math.min(1, sl.v / need)); }
     // baselines from the previous 60 days only
     ['hrv', 'rhr', 'resp', 'temp'].forEach(k => { hist[k] = hist[k].filter(p => p[0] >= n - BASE_W && p[0] < n); });
     hist.sleep = hist.sleep.filter(p => p[0] >= n - 7 && p[0] < n);
@@ -242,7 +309,7 @@ function compute(days) {
       const a = hist.rhr.map(p => p[1]); const z = -(rhr - mean(a)) / Math.max(sd(a), 2);
       parts.push([0.25, z]); o.rhrNorm = Math.round(mean(a)); o.rhrZ = z;
     }
-    if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, h.sleep_h / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
+    if (o.sleepPerf != null) { o.sleepZ = (Math.min(1.1, o.sleep / need) - 0.9) / 0.12; if (parts.length) parts.push([0.25, o.sleepZ]); }
     // not scored, but flagged: breathing rate and wrist temperature well above your normal often mean illness or poor recovery
     const resp = num(h.resp_rate), temp = num(h.wrist_temp);
     if (resp != null && hist.resp.length >= BASE_MIN) { const a = hist.resp.map(p => p[1]); o.respNorm = Math.round(mean(a) * 10) / 10; o.respHigh = resp > mean(a) + Math.max(1, 2 * sd(a)); }
@@ -278,7 +345,7 @@ export function morningMsg(healthDays, todayId) {
   const bits = [];
   if (sc.hrv != null) bits.push('HRV ' + Math.round(sc.hrv) + (sc.hrvNorm ? ' (normal ' + sc.hrvNorm + ')' : ''));
   if (sc.rhr != null) bits.push('resting HR ' + Math.round(sc.rhr));
-  if (sc.sleep != null) bits.push(sc.sleep.toFixed(1) + ' h sleep');
+  if (sc.sleep != null) bits.push(sc.sleep.toFixed(1) + ' h sleep' + (sc.sleepSrc === 'phone' ? ' (from phone use)' : sc.sleepSrc === 'capped' ? ' (capped by phone use)' : ''));
   return { title: 'Recovery ' + r + '%, ' + band, body: (bits.length ? bits.join(', ') + '. ' : '') + 'Strain target ' + c.lo + '–' + c.hi + ': ' + c.t, url: './#body' };
 }
 
@@ -311,12 +378,16 @@ async function send(db, keys, sub, msg) {
 
 async function run(db, keys, opts = {}) {
   const since = toId(Math.floor(Date.now() / 86400000) - 120);
-  const [subs, settings, dayRows, tokens] = await Promise.all([
+  const nowD = opts.at || new Date();
+  const [subs, settings, dayRows, tokens, pings, profs] = await Promise.all([
     db('push_subs?select=endpoint,user_id,sub,prefs,tz,sent'),
     db('settings?select=user_id,data'),
     db('days?select=user_id,day,data,health&day=gte.' + since),
-    db('health_tokens?select=user_id')
+    db('health_tokens?select=user_id'),
+    db('phone_pings?select=user_id,at&at=gte.' + new Date(nowD.getTime() - 3 * 864e5).toISOString()).catch(() => []),
+    db('profiles?select=user_id,username,display_name').catch(() => [])
   ]);
+  const names = {}; profs.forEach(p => { names[p.user_id] = p.display_name || (p.username ? '@' + p.username : ''); });
   const plans = {}, days = {}, health = {}, lastImport = {}, lastSync = {}, tzOf = {};
   settings.forEach(s => { plans[s.user_id] = s.data || {}; });
   subs.forEach(s => { if (!tzOf[s.user_id]) tzOf[s.user_id] = s.tz; });
@@ -329,6 +400,20 @@ async function run(db, keys, opts = {}) {
     }
   });
   const out = [];
+  // 0. Sleep from phone use, for today and yesterday (the Watch's sleep is capped by it; with the Watch off it is the estimate)
+  const byUser = {}; pings.forEach(p => { (byUser[p.user_id] = byUser[p.user_id] || []).push(Date.parse(p.at)); });
+  for (const uid of Object.keys(byUser)) {
+    const tz = tzOf[uid] || 'Europe/London', now = localNow(tz, nowD), off = tzOffset(tz, nowD);
+    for (const id of [toId(toN(now.id) - 1), now.id]) {
+      const ps = phoneSleep(byUser[uid], id, off); if (!ps) continue;
+      const cur = (health[uid] || {})[id] || {}, keys = ['sleep_phone_h', 'sleep_cap_h', 'phone_bed_ms', 'phone_wake_ms', 'phone_n'];
+      if (keys.every(k => cur[k] === ps[k])) continue;
+      const next = Object.assign({}, cur); keys.forEach(k => { if (ps[k] == null) delete next[k]; else next[k] = ps[k]; });
+      if (!opts.dry) await db('days?on_conflict=user_id,day', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([{ user_id: uid, day: id, health: next }]) });
+      (health[uid] = health[uid] || {})[id] = next;
+      out.push('phone sleep ' + id + ' ' + (ps.sleep_phone_h != null ? ps.sleep_phone_h + ' h' : 'cap ' + ps.sleep_cap_h));
+    }
+  }
   // 1. Autopilot: complete the days you didn't mark (cheats are the only thing left to log by hand)
   for (const uid of Object.keys(plans)) {
     const now = localNow(tzOf[uid] || 'Europe/London', opts.at);
@@ -356,8 +441,13 @@ async function run(db, keys, opts = {}) {
     const due = [];
     if (sent.morning !== now.id && inWin(mh, 4)) { const m = morningPush(plan, dd, hh, p, now, { force: now.hour >= mh + 3 }); if (m) due.push(['morning', m]); else if (now.hour >= mh + 3) sent.morning = now.id; }
     if (sent.evening !== now.id && inWin(eh, 3)) {
-      const m = now.sunday && p.weekly !== false ? weeklyBrief(plan, dd, hh, now, lastImport[uid]) : eveningPush(plan, dd, hh, p, now);
+      const m = now.sunday && p.weekly !== false ? weeklyBrief(plan, dd, hh, now, lastImport[uid], names[uid]) : eveningPush(plan, dd, hh, p, now);
       if (m) due.push(['evening', m]); else sent.evening = now.id;
+    }
+    if (p.weekly !== false && now.id.endsWith('-01') && sent.monthly !== now.id && inWin(eh, 3)) { const m = monthlyBrief(plan, dd, hh, now, names[uid]); if (m) due.push(['monthly', m]); else sent.monthly = now.id; }
+    if (p.milestone !== false && inWin(9, 13)) {
+      const ms = milestone(plan, merge(dd, hh), now.id, sent.ms, names[uid]);
+      if (ms.msg) due.push(['ms', ms.msg, ms.count]);
     }
     if (p.stalled !== false && hasToken.has(uid) && now.hour >= 9 && now.hour < 22 && (!sent.stalled || toN(now.id) - toN(sent.stalled) >= 3)) {
       const m = stalledPush(lastSync[uid], opts.at ? opts.at.getTime() : Date.now()); if (m) due.push(['stalled', m]);
@@ -367,7 +457,7 @@ async function run(db, keys, opts = {}) {
       let res; try { res = opts.dry ? 'dry' : await send(db, keys, s, { title: m.title, body: m.body, url: m.url, tag: m.tag }); } catch (e) { res = 'failed ' + (e && e.message || e); }
       out.push(kind + ' ' + res + (opts.dry ? ': ' + m.title + ' | ' + m.body : ''));
       if (res === 'expired') { gone = true; break; }
-      if (!res.startsWith('failed')) sent[kind] = now.id;
+      if (!res.startsWith('failed')) sent[kind] = kind === 'ms' ? due.find(d => d[0] === 'ms')[2] : now.id;
     }
     if (!gone && !opts.dry && JSON.stringify(sent) !== JSON.stringify(s.sent || {})) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sent }) });
   }
@@ -395,7 +485,7 @@ async function login(db, req, env) {
 // ---------- Apple Watch (iPhone Shortcut) ----------
 // The Shortcut posts today's Apple Health numbers to ...?action=health&k=<personal key>.
 // No headers or dates needed: the day is today in the phone's zone (Europe/London unless &tz= is given).
-const HEALTH_KEYS = ['workouts', 'active_kcal', 'resting_kcal', 'weight_kg', 'steps', 'sleep_h', 'sleep_min', 'exercise_min', 'rhr', 'hrv_ms', 'resp_rate', 'spo2', 'vo2max'];
+const HEALTH_KEYS = ['workouts', 'active_kcal', 'resting_kcal', 'weight_kg', 'steps', 'sleep_h', 'sleep_min', 'exercise_min', 'rhr', 'hrv_ms', 'resp_rate', 'spo2', 'vo2max', 'body_fat', 'lean_kg'];
 async function health(db, req, q) {
   const text = (s, status = 200) => new Response(s, { status, headers: Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS) });
   const k = q.get('k') || '';
@@ -414,7 +504,7 @@ async function health(db, req, q) {
     if (Array.isArray(v)) {
       const ns = v.map(toNum).filter(n => n != null);
       if (!ns.length) continue;
-      v = SUMS.includes(key) ? ns.reduce((a, b) => a + b, 0) : key === 'weight_kg' ? ns[ns.length - 1] : ns.reduce((a, b) => a + b, 0) / ns.length;
+      v = SUMS.includes(key) ? ns.reduce((a, b) => a + b, 0) : ['weight_kg', 'body_fat', 'lean_kg'].includes(key) ? ns[ns.length - 1] : ns.reduce((a, b) => a + b, 0) / ns.length;
     }
     if (v === undefined || v === null || v === '') continue;
     // Shortcuts sends an empty reading (nothing recorded yet today) as 0: treat it as missing
@@ -435,8 +525,64 @@ async function health(db, req, q) {
   if (N('hrv_ms') != null) bits.push('HRV ' + Math.round(N('hrv_ms')));
   if (N('rhr') != null) bits.push('resting HR ' + Math.round(N('rhr')));
   if (N('weight_kg') != null) bits.push(N('weight_kg') + ' kg');
+  if (N('body_fat') != null) bits.push((N('body_fat') <= 1 ? N('body_fat') * 100 : N('body_fat')).toFixed(1) + '% body fat');
   if (N('steps') != null) bits.push(Math.round(N('steps')) + ' steps');
   return text('Cut Log synced ' + day + (bits.length ? ': ' + bits.join(', ') : ''));
+}
+
+// ---------- phone use ----------
+// The "App is opened" Shortcut automation calls ?action=ping&k=KEY: one timestamp, nothing else.
+async function ping(db, q) {
+  const k = q.get('k') || '';
+  try { await db('rpc/phone_ping', { method: 'POST', body: JSON.stringify({ p_token: k }) }); }
+  catch (e) { if (/unknown token/.test(e.message)) return new Response('That key isn’t valid any more.', { status: 401, headers: CORS }); throw e; }
+  return new Response('ok', { headers: Object.assign({ 'Content-Type': 'text/plain' }, CORS) });
+}
+// Sleep for day D = the night that ended on D: phone-free stretches between 18:00 the evening before and 18:00 on D.
+export function phoneSleep(pingsMs, dayId, tzOffsetMin = 0) {
+  const start = Date.UTC(+dayId.slice(0, 4), +dayId.slice(5, 7) - 1, +dayId.slice(8, 10)) - 6 * 3600e3 - tzOffsetMin * 60e3;
+  const end = start + 24 * 3600e3;
+  const inWin = pingsMs.filter(t => t >= start - 3 * 3600e3 && t <= end).sort((a, b) => a - b);
+  if (inWin.filter(t => t >= start && t <= end).length < 4) return null; // not enough to tell
+  // the main sleep is the longest stretch with no phone use; nobody sleeps longer than that in one go
+  let longest = 0, lStart = 0;
+  for (let i = 1; i < inWin.length; i++) {
+    const a = Math.max(inWin[i - 1], start), b = Math.min(inWin[i], end), g = (b - a) / 3600e3;
+    if (g > longest) { longest = g; lStart = a; }
+  }
+  const r2 = v => Math.round(v * 100) / 100;
+  if (longest < 2) return { sleep_cap_h: r2(Math.max(longest, 0)), phone_n: inWin.length };
+  return { sleep_phone_h: r2(longest - 0.25), sleep_cap_h: r2(longest), phone_bed_ms: lStart, phone_wake_ms: lStart + longest * 3600e3, phone_n: inWin.length };
+}
+const tzOffset = (tz, at) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at).map(x => [x.type, x.value])); return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - Math.floor(at.getTime() / 60e3) * 60e3) / 60e3; };
+
+// ---------- lock-screen widget (Scriptable) ----------
+// GET ?action=widget&k=KEY  -> small JSON with today's numbers, for the iPhone widget.
+async function sha256hex(t) { const b = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(t))); return Array.from(b, x => x.toString(16).padStart(2, '0')).join(''); }
+async function widget(db, q) {
+  const k = q.get('k') || '';
+  const rows = k ? await db('health_tokens?select=user_id&token_hash=eq.' + await sha256hex(k)) : [];
+  if (!rows.length) return json({ error: 'unknown key' }, 401);
+  const uid = rows[0].user_id, since = toId(Math.floor(Date.now() / 864e5) - 400);
+  const [set, dr, prof, subs] = await Promise.all([
+    db('settings?select=data&user_id=' + eq(uid)), db('days?select=day,data,health&user_id=' + eq(uid) + '&day=gte.' + since),
+    db('profiles?select=username,display_name&user_id=' + eq(uid)), db('push_subs?select=tz&user_id=' + eq(uid) + '&limit=1')
+  ]);
+  const plan = Object.assign({}, PLAN_DEFAULT, (set[0] || {}).data || {}), now = localNow((subs[0] || {}).tz || 'Europe/London');
+  const all = {}, health = {}; dr.forEach(r => { all[r.day] = Object.assign({}, r.data || {}, r.health ? { health: r.health } : {}); if (r.health) health[r.day] = r.health; });
+  const sc = compute(all), t = sc[now.id] || {}, y = sc[toId(toN(now.id) - 1)] || {};
+  const prot = proteinDays(plan, all, toId(toN(now.id) + 14)), next = Object.keys(prot).filter(id => id >= now.id).sort()[0];
+  const wt = weekTarget(plan, all, now.id), p = prof[0] || {};
+  return json({
+    name: p.display_name || (p.username ? '@' + p.username : ''), day: toN(now.id) - toN(plan.start) + 1,
+    streak: streak(plan, all, now.id) + ((all[now.id] || {}).mark === 'done' ? 1 : 0), today: (all[now.id] || {}).mark || null,
+    recovery: t.recovery != null ? t.recovery : null, strain: t.strain != null ? t.strain : null,
+    sleep: t.sleep != null ? Math.round(t.sleep * 10) / 10 : (y.sleep != null ? Math.round(y.sleep * 10) / 10 : null),
+    protein: !!prot[now.id], nextShake: next || null, shake: plan.shake,
+    weight: Math.round(wt.est.morning * 10) / 10, tomorrow: Math.round(wt.est.tomorrow * 10) / 10,
+    weekEnd: wt.endId, weekBy: toId(toN(wt.endId) + 1), weekTarget: Math.round(wt.kg * 10) / 10, goal: plan.goal, toGo: Math.max(0, Math.round((wt.est.morning - plan.goal) * 10) / 10),
+    updated: new Date().toISOString()
+  });
 }
 
 // ---------- Cut Log Sync (iPhone app) ----------
@@ -466,6 +612,8 @@ export async function handle(req, env) {
     if (action === 'health') return await health(db, req, q);
     if (action === 'push') return await pushApp(db, req, q);
     if (action === 'login') return await login(db, req, env);
+    if (action === 'ping') return await ping(db, q);
+    if (action === 'widget') return await widget(db, q);
     const keys = await getKeys(db);
     if (action === 'init') return json({ publicKey: keys.public_key });
     if (action === 'test') {

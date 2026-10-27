@@ -96,9 +96,9 @@
       window.addEventListener('offline', () => { if (user) setStatus('offline'); });
       // Visible: pull anything new (e.g. tonight's watch data). Hidden (app closed or switched away):
       // push anything waiting straight away. Every tap is already on the phone's disk before this.
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' || Store.pending) Store.sync(); });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Store.ping(); if (document.visibilityState === 'visible' || Store.pending) Store.sync(); });
       window.addEventListener('pagehide', () => { if (Store.pending) Store.sync(); });
-      setInterval(() => { if (document.visibilityState === 'visible') Store.sync(); }, 60000);
+      setInterval(() => { if (document.visibilityState === 'visible') { Store.sync(); Store.ping(); } }, 60000);
     },
 
     async saveDay(id, rec) {
@@ -217,6 +217,7 @@
       if (!user) return;
       Store.refreshPasskeys();
       Store.loadProfile().catch(() => {});
+      Store.ping();
       const done = await get('meta', 'uploadedFor');
       if (done !== user.id && Object.keys(state.days).length) { await Store.firstSyncUploadAll(); await put('meta', 'uploadedFor', user.id); }
       else { if (done !== user.id) await put('meta', 'uploadedFor', user.id); await Store.sync(); }
@@ -241,6 +242,13 @@
       const j = await Store._fn('login', { username, password });
       const { error } = await sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
       if (error) throw error;
+    },
+    // "the phone is in use right now": for sleep when the Watch is off (only a timestamp is stored)
+    _lastPing: 0,
+    ping() {
+      if (!sb || !user || !navigator.onLine || Date.now() - Store._lastPing < 4 * 60e3) return;
+      Store._lastPing = Date.now();
+      sb.rpc('phone_ping_me').then(() => {}, () => {});
     },
     get isAnonymous() { return !!(user && (user.is_anonymous || (!user.email && !user.phone))); },
     get autoBackup() { return state.autoBackup; },
