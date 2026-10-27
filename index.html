@@ -26,6 +26,7 @@
   --cheat:#f05252; --cheat-soft:#2e1112;
   --tee:#3d8bff;
   --xp:#fbbf24; --xp-ink:#1a1300;
+  --sleep:#a78bfa;
   --flame:#0b0b0b; --flame-2:#ffd2bf;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -41,6 +42,7 @@
   --cheat:#dc2626; --cheat-soft:#fde2e2;
   --tee:#2563eb;
   --xp:#f59e0b; --xp-ink:#1a1300;
+  --sleep:#7c3aed;
   --flame:#0b0b0b; --flame-2:#ffe4d6;
   color-scheme:light;}}
 *{box-sizing:border-box}
@@ -102,6 +104,7 @@ button{-webkit-tap-highlight-color:transparent}
 .bar i{display:block;height:100%;border-radius:6px;transition:width .4s ease-out}
 .bar.xp i{background:var(--xp)}
 .bar.kg i{background:var(--done)}
+.bar.imp i{background:var(--blue)}
 .alarm{background:var(--cheat);color:#fff;border-radius:var(--r-lg);padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
 .alarm svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .alarm b{font-family:var(--display);font-size:1.2rem;text-transform:uppercase;letter-spacing:.02em;display:block;line-height:1.1}
@@ -198,6 +201,22 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .steps li.done b{color:var(--muted);text-decoration:line-through}
 .steps .tick{color:var(--done);font-weight:800}
 .linkbtn{font:inherit;font-size:.85rem;background:none;border:0;color:var(--muted);cursor:pointer;min-height:44px;padding:0 4px}
+.rings{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px}
+.ring{position:relative;display:grid;justify-items:center;gap:4px}
+.ring svg{width:100%;max-width:104px;height:auto;display:block}
+.ring-in{position:absolute;top:0;left:0;right:0;aspect-ratio:1;max-width:104px;margin:0 auto;display:grid;place-content:center;text-align:center;line-height:1.05}
+.ring-in b{font-family:var(--display);font-size:1.7rem;font-weight:800}
+.ring-in span{font-size:.72rem;color:var(--muted)}
+.tiles4{grid-template-columns:repeat(2,1fr)!important}
+.tiles4 b{font-size:1.15rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.chips button{font:inherit;font-size:.85rem;font-weight:600;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.plot{position:relative;margin-top:10px;touch-action:pan-y}
+.plot .tip{position:absolute;top:0;z-index:2;pointer-events:none;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px;font-size:.8rem;display:grid;line-height:1.3;white-space:nowrap}
+.plot .tip span{color:var(--muted)}
+.guide-ol{margin:4px 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
+.bar.imp{margin-top:10px}
 .guide{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
 .guide summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .guide ol{margin:6px 0 10px;padding-left:22px;display:grid;gap:8px;color:var(--ink);line-height:1.45}
@@ -326,13 +345,11 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 
     <button class="cta" type="button" id="ctaLog">Log today</button>
 
-    <div class="card" id="watchToday" hidden>
-      <div class="row"><span class="label">Apple Watch today</span><span class="label" id="wtWhen"></span></div>
-      <div class="tiles3">
-        <div><b id="wtWork">–</b><span>workouts</span></div>
-        <div><b id="wtActive">–</b><span>active kcal</span></div>
-        <div><b id="wtSteps">–</b><span>steps</span></div>
-      </div>
+    <div class="card" id="bodyToday" hidden>
+      <div class="row"><span class="label">Body today</span><span class="label" id="wtWhen"></span></div>
+      <div class="rings" id="rings"></div>
+      <p class="note" id="bodyNote" hidden></p>
+      <div class="tiles3 tiles4" id="bodyTiles"></div>
       <div class="btns"><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
     </div>
 
@@ -431,6 +448,14 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
   <!-- STATS -->
   <section class="tab" id="tab-stats" aria-label="Stats" hidden>
     <div class="tabhead"><h2>Stats</h2></div>
+    <div class="card chart" id="bodyHist" hidden>
+      <div class="row"><span class="label" id="bhTitle">Body history</span><span class="label" id="bhSum"></span></div>
+      <div class="chips" id="bhMetric" role="group" aria-label="Measure"></div>
+      <div class="chips" id="bhRange" role="group" aria-label="Period">
+        <button type="button" data-r="30" aria-pressed="true">30D</button><button type="button" data-r="90" aria-pressed="false">90D</button><button type="button" data-r="365" aria-pressed="false">1Y</button><button type="button" data-r="0" aria-pressed="false">All</button>
+      </div>
+      <div class="plot" id="bhChart"></div>
+    </div>
     <div class="card chart">
       <div class="row"><span class="label">Weight</span><span class="label" id="chartRange"></span></div>
       <div id="chart"></div>
@@ -559,21 +584,36 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <small>Making a new link switches the old one off. The header never changes.</small>
         </div>
         <details class="guide" id="wGuide">
-          <summary>Set up the Shortcut (about 5 minutes, once)</summary>
+          <summary>Set up the Shortcut (about 6 minutes, once)</summary>
           <ol>
             <li>Tap <b>Create Shortcut link</b> above and keep this screen open.</li>
             <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a> (a new, empty Shortcut opens). Name it <b>Cut Log Sync</b>.</li>
-            <li>Add <b>Find Health Samples</b>: Type <b>Workouts</b>, Start Date <b>is today</b>. Then add <b>Count</b>.</li>
-            <li>Add <b>Find Health Samples</b>: <b>Active Energy</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b> → <b>Sum</b>.</li>
-            <li>Add <b>Find Health Samples</b>: <b>Weight</b>, Start Date <b>is today</b>, <b>Latest First</b>, Limit <b>1</b>.</li>
-            <li>Add <b>Get Contents of URL</b>: paste the <b>link</b>. Tap the arrow: Method <b>POST</b>; Headers: <code>Authorization</code> = paste the <b>header</b>; Request Body <b>JSON</b> with three <b>Number</b> fields: <code>workouts</code> = Count, <code>active_kcal</code> = Statistics, <code>weight_kg</code> = Health Samples.</li>
-            <li>Tap <b>▶</b>. iPhone asks to access Health: tap <b>Allow</b>. You'll see today's numbers here within a minute.</li>
-            <li>Make it automatic: <b>Automation</b> tab → <b>+</b> → <b>Time of Day</b> 23:55 → Daily → <b>Run Immediately</b> → Cut Log Sync.</li>
+            <li>Add <b>Find Health Samples</b> → Type <b>Exercise Minutes</b>, Start Date <b>is today</b>. Then add <b>Calculate Statistics</b> → <b>Sum</b>. <small>(Shortcuts can't read workouts, so 20+ exercise minutes counts as a session and 90+ as a double.)</small></li>
+            <li>Same pair for <b>Active Energy</b> → <b>Sum</b>.</li>
+            <li>Add <b>Find Health Samples</b> → <b>Heart Rate Variability</b>, Start Date <b>is today</b>. Then <b>Calculate Statistics</b> → <b>Average</b>.</li>
+            <li>Same pair for <b>Resting Heart Rate</b> → <b>Average</b>.</li>
+            <li>Add <b>Find Health Samples</b> → <b>Weight</b>, Start Date <b>is today</b>, <b>Latest First</b>, Limit <b>1</b>.</li>
+            <li>Add <b>Get Contents of URL</b>: paste the <b>link</b>. Tap the arrow: Method <b>POST</b>; Headers: <code>Authorization</code> = paste the <b>header</b>; Request Body <b>JSON</b> with five <b>Number</b> fields, each set by tapping it and picking the matching result: <code>exercise_min</code>, <code>active_kcal</code>, <code>hrv_ms</code>, <code>rhr</code>, <code>weight_kg</code>.</li>
+            <li>Tap <b>▶</b>. iPhone asks to access Health: tap <b>Allow</b>. Your numbers show on Home within a minute.</li>
+            <li>Make it automatic: <b>Automation</b> tab → <b>+</b> → <b>Time of Day</b> → 23:55 → Daily → <b>Run Immediately</b> → Cut Log Sync. Add one at 09:00 too, so the morning's HRV gives you today's recovery.</li>
           </ol>
-          <small>Optional extras, same way: <b>Resting Energy</b> + Sum as <code>resting_kcal</code>, and <b>Steps</b> + Sum as <code>steps</code>.</small>
+          <small>Optional extras, same way: <b>Steps</b> + Sum as <code>steps</code>, <b>Resting Energy</b> + Sum as <code>resting_kcal</code>, <b>Respiratory Rate</b> + Average as <code>resp_rate</code>. Sleep stages, real workouts and heart-rate strain come from <b>Apple Health history</b> below.</small>
           <small>If it says the key isn't valid, make a new link here and paste it into step 7. If it says “Missing authorization header”, check the header in step 7. If weight never arrives, let your scale's app write to Apple Health.</small>
         </details>
       </div>
+    </div>
+
+    <div class="card" id="impCard">
+      <div class="row"><span class="label">Apple Health history</span><span class="label" id="impStatus"></span></div>
+      <p class="note">Bring in <b>everything</b> your iPhone and Watch have ever recorded: workouts, sleep stages, heart rate, HRV, resting heart rate, VO₂ max, blood oxygen, steps and weight. It's read on this phone; only one summary row per day is saved.</p>
+      <ol class="guide-ol">
+        <li>Open the <b>Health</b> app → tap your photo (top right) → <b>Export All Health Data</b> → <b>Export</b>.</li>
+        <li>When it's ready, choose <b>Save to Files</b>.</li>
+        <li>Come back here and tap <b>Choose export.zip</b>. Large exports take a minute or two.</li>
+      </ol>
+      <div class="btns"><label class="btn primary" for="impFile" style="display:inline-flex;align-items:center">Choose export.zip</label><input id="impFile" type="file" accept=".zip,.xml,application/zip,text/xml" hidden></div>
+      <div class="bar imp" id="impBar" hidden aria-hidden="true"><i id="impFill" style="width:0%"></i></div>
+      <small id="impMsg"></small>
     </div>
 
     <div class="card" id="remCard">
@@ -626,6 +666,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
+<script src="health.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -28,6 +28,7 @@
     });
   }
   const put = (store, key, val) => tx(store, 'readwrite', s => s.put(val, key));
+  const putMany = (store, entries) => tx(store, 'readwrite', s => { entries.forEach(([k, v]) => s.put(v, k)); });
   const del = (store, key) => tx(store, 'readwrite', s => s.delete(key));
   const get = (store, key) => tx(store, 'readonly', s => s.get(key));
   function getAll(store) {
@@ -49,7 +50,7 @@
     get status() { return state.status; },
     get user() { return user; },
     get connected() { return !!sb; },
-    get pending() { return state.outbox.size + (state.planDirty ? 1 : 0); },
+    get pending() { return state.outbox.size + (state.planDirty ? 1 : 0) + (state.healthOutbox ? state.healthOutbox.size : 0); },
     get lastSyncAt() { return state.lastSyncAt; },
     get persisted() { return state.persisted; },
     on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -61,6 +62,7 @@
       const ob = await get('meta', 'outbox'); if (ob) { state.outbox = new Set(ob.days || []); state.planDirty = !!ob.plan; }
       state.lastPull = (await get('meta', 'lastPull')) || null;
       state.lastSyncAt = (await get('meta', 'lastSyncAt')) || null;
+      state.healthOutbox = new Set((await get('meta', 'healthOutbox')) || []);
       // Ask the browser to never clear this app's storage on its own (granted automatically
       // for Home Screen apps on iPhone and for installed apps elsewhere).
       try {
@@ -144,6 +146,16 @@
             state.planDirty = false;
           }
           await saveOutbox();
+          // push imported Apple Health history (merged into each day's health on the server)
+          if (state.healthOutbox && state.healthOutbox.size) {
+            const ids = [...state.healthOutbox];
+            for (let i = 0; i < ids.length; i += 300) {
+              const rows = ids.slice(i, i + 300).filter(id => state.days[id] && state.days[id].health).map(id => ({ day: id, health: state.days[id].health }));
+              if (rows.length) { const { error } = await sb.rpc('health_import', { p_rows: rows }); if (error) throw error; }
+              ids.slice(i, i + 300).forEach(id => state.healthOutbox.delete(id));
+              await put('meta', 'healthOutbox', [...state.healthOutbox]);
+            }
+          }
           // pull days
           let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).limit(1000);
           // Look back 5 minutes past the last pull: re-reading a row is harmless, missing one isn't.
@@ -247,6 +259,21 @@
       }
       const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect, shouldCreateUser: true } });
       if (error) throw error; return 'link';
+    },
+    // Apple Health history: merge into each day on the phone, then queue for the cloud.
+    async importHealth(rows) {
+      const entries = [];
+      for (const r of rows) {
+        const cur = state.days[r.day] || {};
+        const rec = Object.assign({}, cur, { health: Object.assign({}, cur.health || {}, r.health) });
+        state.days[r.day] = rec; entries.push([r.day, rec]);
+        state.healthOutbox.add(r.day);
+      }
+      for (let i = 0; i < entries.length; i += 500) await putMany('days', entries.slice(i, i + 500)); // one write per 500 days
+      await put('meta', 'healthOutbox', [...state.healthOutbox]);
+      emit('data');
+      if (sb && user && navigator.onLine) { await Store.sync(); return { cloud: state.healthOutbox.size === 0, pending: state.healthOutbox.size > 0 }; }
+      return { cloud: false, pending: !!sb };
     },
     async firstSyncUploadAll() { if (!sb || !user) return; Object.keys(state.days).forEach(id => state.outbox.add(id)); state.planDirty = true; await saveOutbox(); await Store.sync(); },
 

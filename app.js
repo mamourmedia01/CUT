@@ -41,7 +41,12 @@
   const rec = id => Object.assign({ mark: null, broken: false, am: false, pm: false, weight: null, waist: null, curl: null, chest: null, protein: null, gymKcal: null, food: null, health: null }, days()[id] || {});
   const H = (r, k) => (r.health && typeof r.health[k] === 'number') ? r.health[k] : null;
   const userSess = r => (r.am ? 1 : 0) + (r.pm ? 1 : 0);
-  const watchSess = r => userSess(r) ? 0 : Math.min(2, Math.round(H(r, 'workouts') || 0));
+  // Watch sessions: real workouts (Health import) if known, else from Exercise Minutes (20+ = 1 session, 90+ = 2).
+  const watchSess = r => {
+    if (userSess(r)) return 0;
+    const w = H(r, 'workouts'); if (w != null) return Math.min(2, Math.round(w));
+    const ex = H(r, 'exercise_min'); return ex == null ? 0 : ex >= 90 ? 2 : ex >= 20 ? 1 : 0;
+  };
   const sessOf = r => userSess(r) || watchSess(r);
   const weightOf = r => r.weight != null ? r.weight : H(r, 'weight_kg');
 
@@ -319,15 +324,77 @@
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
     renderWatchToday(); renderSafe(); renderSetup();
   }
+  // ---------- Body today (Whoop-style) + history ----------
+  let bodyScores = {};
   function renderWatchToday() {
-    const lastW = watchLast(), r = rec(idOf(today)), h = r.health || {};
-    $('watchToday').hidden = !lastW;
-    if (!lastW) return;
-    $('wtWhen').textContent = 'Synced ' + ago(lastW);
-    $('wtWork').textContent = h.workouts != null ? h.workouts : '–';
-    $('wtActive').textContent = h.active_kcal != null ? kfmt(h.active_kcal) : '–';
-    $('wtSteps').textContent = h.steps != null ? kfmt(h.steps) : '–';
+    bodyScores = window.CutHealth ? CutHealth.compute(days()) : {};
+    const CH = window.CutHealth, tId = idOf(today), yId = idOf(addDays(today, -1));
+    const pick = [tId, yId].find(id => days()[id] && days()[id].health);
+    $('bodyToday').hidden = !CH || !pick;
+    renderBodyHist();
+    if (!CH || !pick) return;
+    const h = days()[pick].health, sc = bodyScores[pick] || {}, lastW = watchLast();
+    $('wtWhen').textContent = (pick === tId ? 'Today' : 'Yesterday') + (lastW ? ' · synced ' + ago(lastW) : '');
+    const b = CH.band(sc.recovery);
+    $('rings').innerHTML =
+      CH.ring(sc.recovery != null ? sc.recovery / 100 : null, b ? b.c : 'var(--line)', sc.recovery != null ? sc.recovery + '%' : '–', b ? b.t : (sc.calibrating != null ? 'calibrating' : 'needs HRV'), 'Recovery') +
+      CH.ring(sc.strain != null ? sc.strain / 21 : null, 'var(--blue)', sc.strain != null ? sc.strain.toFixed(1) : '–', sc.strain != null ? (sc.strainEst ? 'estimate' : 'of 21') : 'no data', 'Strain') +
+      CH.ring(sc.sleepPerf != null ? sc.sleepPerf / 100 : null, 'var(--sleep)', sc.sleepPerf != null ? sc.sleepPerf + '%' : '–', sc.sleep != null ? sc.sleep.toFixed(1) + ' h' : 'no data', 'Sleep');
+    const notes = [];
+    if (sc.recovery == null && sc.calibrating != null) notes.push('Recovery appears after 7 days of HRV (' + sc.calibrating + ' so far). Import your Apple Health history to start straight away.');
+    if (sc.recovery == null && sc.calibrating == null) notes.push('Recovery needs HRV: add Heart Rate Variability to the Shortcut, or import your Apple Health history.');
+    if (sc.strainEst) notes.push('Strain is estimated from exercise minutes and steps. Import Apple Health for heart-rate based strain.');
+    $('bodyNote').hidden = !notes.length; $('bodyNote').textContent = notes.join(' ');
+    const t = (v, lab, sub) => '<div><b>' + v + '</b><span>' + lab + (sub ? ' · ' + sub : '') + '</span></div>';
+    $('bodyTiles').innerHTML =
+      t(h.hrv_ms != null ? Math.round(h.hrv_ms) : '–', 'HRV ms', sc.hrvNorm ? 'normal ' + sc.hrvNorm : '') +
+      t(h.rhr != null ? Math.round(h.rhr) : '–', 'resting HR', sc.rhrNorm ? 'normal ' + sc.rhrNorm : '') +
+      t(h.steps != null ? kfmt(h.steps) : '–', 'steps') +
+      t(h.active_kcal != null ? kfmt(h.active_kcal) : '–', 'active kcal');
   }
+  let bhMetric = 'recovery', bhRange = 30;
+  try { const j = JSON.parse(localStorage.getItem('cutlog-bh') || 'null'); if (j) { bhMetric = j.m || bhMetric; bhRange = j.r != null ? j.r : bhRange; } } catch (e) {}
+  function renderBodyHist() {
+    const CH = window.CutHealth; if (!CH) return;
+    const ds = days(), ids = Object.keys(ds).filter(id => ds[id] && ds[id].health);
+    $('bodyHist').hidden = !ids.length; if (!ids.length) return;
+    const avail = Object.keys(CH.METRICS).filter(k => ids.some(id => { const v = CH.METRICS[k].get(ds[id].health, bodyScores[id]); return typeof v === 'number'; }));
+    if (!avail.includes(bhMetric)) bhMetric = avail[0] || 'steps';
+    $('bhMetric').innerHTML = avail.map(k => '<button type="button" data-m="' + k + '" aria-pressed="' + (k === bhMetric) + '">' + CH.METRICS[k].name + '</button>').join('');
+    $('bhRange').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.r === bhRange)));
+    const r = CH.chart($('bhChart'), ds, bodyScores, bhMetric, bhRange, idOf(today));
+    $('bhTitle').textContent = CH.METRICS[bhMetric].name;
+    $('bhSum').textContent = r ? 'avg ' + CH.fmtN(r.avg, r.dp) + (r.unit ? ' ' + r.unit : '') + ' · ' + r.n + ' days' : '';
+  }
+  const saveBh = () => { try { localStorage.setItem('cutlog-bh', JSON.stringify({ m: bhMetric, r: bhRange })); } catch (e) {} };
+  $('bhMetric').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; bhMetric = b.dataset.m; saveBh(); renderBodyHist(); });
+  $('bhRange').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; bhRange = +b.dataset.r; saveBh(); renderBodyHist(); });
+
+  // ---------- Apple Health history import ----------
+  $('impFile').addEventListener('change', () => {
+    const f = $('impFile').files[0]; $('impFile').value = ''; if (!f) return;
+    let w; try { w = new Worker('health-import-worker.js'); } catch (e) { $('impMsg').textContent = 'This browser can’t run the importer.'; return; }
+    $('impBar').hidden = false; $('impFill').style.width = '0%'; $('impStatus').textContent = 'Reading…';
+    $('impMsg').textContent = 'Reading ' + (f.size / 1048576).toFixed(0) + ' MB on this phone. Keep the app open.';
+    w.onmessage = async ev => {
+      const m = ev.data;
+      if (m.progress != null) { $('impFill').style.width = Math.round(m.progress * 100) + '%'; if (m.records) $('impMsg').textContent = kfmt(m.records) + ' measurements read…'; return; }
+      w.terminate();
+      if (m.error) { $('impStatus').textContent = ''; $('impBar').hidden = true; $('impMsg').textContent = m.error; return; }
+      const { rows, stats } = m.result;
+      if (!rows.length) { $('impStatus').textContent = ''; $('impMsg').textContent = 'No Apple Health data found in that file.'; return; }
+      $('impMsg').textContent = 'Saving ' + kfmt(rows.length) + ' days…';
+      try {
+        const up = await Store.importHealth(rows);
+        render();
+        $('impStatus').textContent = 'Imported';
+        $('impMsg').textContent = 'Done: ' + kfmt(stats.days) + ' days from ' + fmt(parseId(stats.firstDay)) + ' ' + stats.firstDay.slice(0, 4) + ' to ' + fmt(parseId(stats.lastDay)) + ', ' + kfmt(stats.workouts) + ' workouts, ' + kfmt(stats.nights) + ' nights of sleep. ' +
+          (up.cloud ? 'Backed up to your database.' : up.pending ? 'Saved on this phone; it uploads when you’re online and signed in.' : 'Saved on this phone.');
+      } catch (e) { $('impMsg').textContent = 'Read it, but saving failed: ' + (e.message || e); }
+    };
+    w.onerror = e => { $('impMsg').textContent = 'The importer stopped: ' + (e.message || 'unknown error'); w.terminate(); };
+    w.postMessage({ file: f });
+  });
 
   // ---------- toast + undo ----------
   let tt, undoFn = null;

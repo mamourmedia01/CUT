@@ -82,7 +82,7 @@ begin
   select user_id into uid from public.health_tokens where token_hash = encode(digest(p_token, 'sha256'), 'hex');
   if uid is null then raise exception 'unknown token'; end if;
   if p_day is null or p_day > current_date + 1 or p_day < current_date - 60 then raise exception 'bad day'; end if;
-  foreach k in array array['workouts','active_kcal','resting_kcal','weight_kg','steps','sleep_h'] loop
+  foreach k in array array['workouts','active_kcal','resting_kcal','weight_kg','steps','sleep_h','sleep_min','exercise_min','rhr','hrv_ms','resp_rate','spo2','vo2max'] loop
     if not (p_payload ? k) then continue; end if;
     if jsonb_typeof(p_payload->k) = 'number' then n := (p_payload->>k)::numeric;
     elsif jsonb_typeof(p_payload->k) = 'string' then
@@ -99,7 +99,16 @@ begin
       if n > 180 then n := n / 2.20462; elsif n < 30 then n := n * 6.35029; end if; -- sent in pounds or stones
       n := round(n, 1);
     end if;
-    if k in ('workouts','steps') then n := round(n); end if;
+    if k in ('workouts','steps','exercise_min') then n := round(n); end if;
+    if k = 'spo2' and n <= 1 then n := round(n * 100, 1); end if;
+    if k in ('rhr','hrv_ms','resp_rate','vo2max') then n := round(n, 1); end if;
+    if k = 'sleep_min' then
+      -- Shortcuts may hand over minutes or seconds; store hours.
+      if n > 1440 then n := n / 3600.0; else n := n / 60.0; end if;
+      if n > 0 and n < 20 then clean := clean || jsonb_build_object('sleep_h', round(n, 2)); end if;
+      continue;
+    end if;
+    if k = 'sleep_h' and n > 24 then continue; end if;
     clean := clean || jsonb_build_object(k, n);
   end loop;
   clean := clean || jsonb_build_object('synced_at', now());
@@ -149,3 +158,26 @@ grant execute on function public.vapid_public() to anon, authenticated;
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.days, public.settings, public.push_subs to authenticated;
 revoke all on public.health_tokens, public.push_keys from anon, authenticated;
+
+-- ---------- Apple Health history import ----------
+-- The app reads the Health app's export file on the phone and sends one row per day.
+-- Runs as the signed-in user, so row-level security keeps it to their own days.
+create or replace function public.health_import(p_rows jsonb)
+returns integer language plpgsql security invoker set search_path = public as $$
+declare n integer;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  with src as (
+    select (r->>'day')::date as day, (r->'health') || jsonb_build_object('imported_at', now()) as health
+    from jsonb_array_elements(p_rows) r
+    where r ? 'day' and jsonb_typeof(r->'health') = 'object'
+  ), up as (
+    insert into public.days (user_id, day, health)
+    select auth.uid(), day, health from src
+    on conflict (user_id, day) do update set health = coalesce(public.days.health, '{}'::jsonb) || excluded.health
+    returning 1
+  ) select count(*) into n from up;
+  return n;
+end $$;
+revoke all on function public.health_import(jsonb) from public, anon;
+grant execute on function public.health_import(jsonb) to authenticated;

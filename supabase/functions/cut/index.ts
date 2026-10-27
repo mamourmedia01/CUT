@@ -156,7 +156,7 @@ async function run(db, keys) {
 // ---------- Apple Watch (iPhone Shortcut) ----------
 // The Shortcut posts today's Apple Health numbers to ...?action=health&k=<personal key>.
 // No headers or dates needed: the day is today in the phone's zone (Europe/London unless &tz= is given).
-const HEALTH_KEYS = ['workouts', 'active_kcal', 'resting_kcal', 'weight_kg', 'steps', 'sleep_h'];
+const HEALTH_KEYS = ['workouts', 'active_kcal', 'resting_kcal', 'weight_kg', 'steps', 'sleep_h', 'sleep_min', 'exercise_min', 'rhr', 'hrv_ms', 'resp_rate', 'spo2', 'vo2max'];
 async function health(db, req, q) {
   const text = (s, status = 200) => new Response(s, { status, headers: Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS) });
   const k = q.get('k') || '';
@@ -178,6 +178,9 @@ async function health(db, req, q) {
   const bits = [];
   if (payload.workouts != null) bits.push(payload.workouts + ' workout' + (+payload.workouts === 1 ? '' : 's'));
   if (payload.active_kcal != null) bits.push(Math.round(parseFloat(String(payload.active_kcal).replace(/,/g, ''))) + ' active kcal');
+  if (payload.exercise_min != null) bits.push(payload.exercise_min + ' exercise min');
+  if (payload.hrv_ms != null) bits.push('HRV ' + Math.round(parseFloat(String(payload.hrv_ms).replace(',', '.'))));
+  if (payload.rhr != null) bits.push('resting HR ' + Math.round(parseFloat(String(payload.rhr).replace(',', '.'))));
   if (payload.steps != null) bits.push(payload.steps + ' steps');
   return text('Cut Log synced ' + day + (bits.length ? ': ' + bits.join(', ') : ''));
 }
