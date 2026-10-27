@@ -682,13 +682,27 @@
 
   // Apple Watch link
   let watchLink = '';
-  $('wToken').addEventListener('click', async () => {
+  // Permanent Shortcut link: loaded from your account each time the card shows
+  let wConfirmAct = null;
+  async function loadWatchLink(force) {
+    if (!Store.user) return;
+    if (watchLink && !force) return;
     try {
-      const t = await Store.createHealthToken();
+      const t = await Store.getHealthToken();
       watchLink = Store.healthLink(t);
-      $('wLink').textContent = watchLink; $('wHead').textContent = Store.healthHeader(); $('wOut').hidden = false; $('wGuide').open = true;
-      toast('Link created. Copy it now.');
-    } catch (e) { toast('Couldn’t create the link. Check you’re signed in and online.'); }
+      $('wLink').textContent = watchLink; $('wHead').textContent = Store.healthHeader();
+    } catch (e) { $('wLink').textContent = 'Couldn’t load your link. Check you’re online.'; }
+  }
+  $('wNew').addEventListener('click', () => { wConfirmAct = 'new'; $('wConfirmText').textContent = 'Make a new link? The old one stops working, so you’ll need to paste the new one into your Shortcut.'; $('wConfirm').hidden = false; });
+  $('wDel').addEventListener('click', () => { wConfirmAct = 'del'; $('wConfirmText').textContent = 'Delete your link? Your Shortcut stops sending until you make a new one.'; $('wConfirm').hidden = false; });
+  $('wNo').addEventListener('click', () => { wConfirmAct = null; $('wConfirm').hidden = true; });
+  $('wYes').addEventListener('click', async () => {
+    $('wConfirm').hidden = true;
+    try {
+      if (wConfirmAct === 'new') { const t = await Store.createHealthToken(); watchLink = Store.healthLink(t); $('wLink').textContent = watchLink; toast('New link made. Paste it into your Shortcut.'); }
+      else if (wConfirmAct === 'del') { await Store.deleteHealthToken(); watchLink = ''; $('wLink').textContent = 'Deleted. Tap Make a new link when you want one.'; toast('Link deleted'); }
+    } catch (e) { toast('That didn’t work. Check you’re online.'); }
+    wConfirmAct = null;
   });
   $('wCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(watchLink); toast('Link copied'); }
@@ -698,10 +712,10 @@
   $('appConnect').addEventListener('click', async () => {
     try {
       $('appMsg').textContent = 'Connecting…';
-      const t = await Store.createHealthToken();
+      const t = await Store.getHealthToken();
       const c = window.CUT_CONFIG || {};
       const push = c.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/cut?action=push&k=' + encodeURIComponent(t);
-      $('appMsg').textContent = 'Opening Cut Log Sync… If nothing happens, install the app first (steps below). This also switches off any Shortcut link you made earlier.';
+      $('appMsg').textContent = 'Opening Cut Log Sync… If nothing happens, install the app first (steps below).';
       location.href = 'cutlogsync://setup?u=' + encodeURIComponent(push) + '&a=' + encodeURIComponent(c.SUPABASE_ANON_KEY);
     } catch (e) { $('appMsg').textContent = 'Couldn’t connect: check you’re signed in and online.'; }
   });
@@ -726,6 +740,7 @@
     const u = Store.user, lastW = watchLast();
     $('watchNeedsText').textContent = !Store.connected ? 'Connects once the database is set up.' : 'Sign in to sync first. The Shortcut sends data to your private database.';
     $('watchNeedsAcct').hidden = !!u; $('watchReady').hidden = !u;
+    if (u) loadWatchLink(false); else watchLink = '';
     $('watchStatus').textContent = lastW ? 'Last sync ' + ago(lastW) : 'Not connected';
     $('wRun').hidden = !lastW;
   }

@@ -281,6 +281,18 @@
     async firstSyncUploadAll() { if (!sb || !user) return; Object.keys(state.days).forEach(id => state.outbox.add(id)); state.planDirty = true; await saveOutbox(); await Store.sync(); },
 
     // ---------- Apple Health link ----------
+    // Your permanent link key: the same every time, on every device, until you make a new one or delete it.
+    async getHealthToken() {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const { data, error } = await sb.rpc('get_health_token');
+      if (error) throw error;
+      return data;
+    },
+    async deleteHealthToken() {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const { error } = await sb.rpc('delete_health_token');
+      if (error) throw error;
+    },
     async createHealthToken() {
       if (!sb || !user) throw new Error('Sign in first.');
       const { data, error } = await sb.rpc('create_health_token');

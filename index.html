@@ -708,13 +708,14 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <p class="note">Apple only lets App Store apps read Apple Health, so a free iPhone Shortcut does it: each night it reads your watch's workouts, active and resting calories, steps and any weigh-in, and sends them here. What you type yourself always wins.</p>
       <div id="watchNeedsAcct"><small id="watchNeedsText">Sign in to sync first. The Shortcut sends data to your private database.</small></div>
       <div id="watchReady" hidden>
-        <div class="btns"><button class="btn primary" type="button" id="wToken">Create Shortcut link</button><a class="btn" id="wRun" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync" hidden>Sync watch now</a></div>
-        <div id="wOut" hidden class="field">
-          <span class="label">1 · Your Shortcut link (shown once)</span><div class="token" id="wLink"></div>
-          <div class="btns"><button class="btn primary" type="button" id="wCopy">Copy link</button></div>
+        <div id="wOut" class="field">
+          <span class="label">1 · Your Shortcut link</span><div class="token" id="wLink">Loading…</div>
+          <div class="btns"><button class="btn primary" type="button" id="wCopy">Copy link</button><a class="btn" id="wRun" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync" hidden>Sync watch now</a></div>
           <span class="label">2 · Header value (for “Authorization”)</span><div class="token" id="wHead"></div>
           <div class="btns"><button class="btn" type="button" id="wCopyHead">Copy header</button></div>
-          <small>Making a new link switches the old one off. The header never changes.</small>
+          <small>Both stay the same for your account, on any device and after signing out. They only change if you tap Make a new link.</small>
+          <div class="btns"><button class="linkbtn" type="button" id="wNew">Make a new link</button><button class="linkbtn" type="button" id="wDel">Delete link</button></div>
+          <div id="wConfirm" class="btns" hidden><small id="wConfirmText"></small><button class="btn danger" type="button" id="wYes">Yes</button><button class="btn" type="button" id="wNo">Cancel</button></div>
         </div>
         <details class="guide" id="wGuide">
           <summary>Set up the Shortcut, step by step (about 6 minutes, once)</summary>
@@ -722,7 +723,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
 
           <h4 class="gstep">A. Start a new Shortcut</h4>
           <ol>
-            <li>Tap <b>Create Shortcut link</b> above. Keep this page open, you'll come back to copy the link and the header.</li>
+            <li>Your link and header are shown above. Keep this page open, you'll come back to copy them.</li>
             <li>Tap <a href="shortcuts://create-shortcut">Open Shortcuts</a>. A blank Shortcut opens.</li>
             <li>Tap the name at the top (<b>New Shortcut</b>), then <b>Rename</b>, type <button type="button" class="key" data-copy="Cut Log Sync">Cut Log Sync</button> and tap <b>Done</b>.</li>
           </ol>

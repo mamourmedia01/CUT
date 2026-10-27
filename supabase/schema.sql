@@ -223,3 +223,46 @@ begin
 end $$;
 revoke all on function public.health_push(text, jsonb) from public;
 grant execute on function public.health_push(text, jsonb) to anon, authenticated;
+
+-- ---------- Permanent Shortcut / app link ----------
+-- Each account keeps ONE link key. It is kept readable (only by its owner, through these functions)
+-- so Cut Log can show the same link on any device, after signing out, or after reinstalling.
+-- It only changes when the owner taps "Make a new link" or "Delete link".
+alter table public.health_tokens add column if not exists token text;
+
+create or replace function public.get_health_token()
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare t text;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  select token into t from public.health_tokens where user_id = auth.uid();
+  if t is not null then return t; end if;
+  -- none yet (or an old key made before keys were kept): make the permanent one
+  t := encode(gen_random_bytes(24), 'hex');
+  insert into public.health_tokens (user_id, token_hash, token) values (auth.uid(), encode(digest(t, 'sha256'), 'hex'), t)
+  on conflict (user_id) do update set token_hash = excluded.token_hash, token = excluded.token, created_at = now();
+  return t;
+end $$;
+
+-- "Make a new link": replaces the key on purpose (the old link stops working)
+create or replace function public.create_health_token()
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare t text;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  t := encode(gen_random_bytes(24), 'hex');
+  insert into public.health_tokens (user_id, token_hash, token) values (auth.uid(), encode(digest(t, 'sha256'), 'hex'), t)
+  on conflict (user_id) do update set token_hash = excluded.token_hash, token = excluded.token, created_at = now();
+  return t;
+end $$;
+
+-- "Delete link"
+create or replace function public.delete_health_token()
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  delete from public.health_tokens where user_id = auth.uid();
+end $$;
+
+revoke all on function public.get_health_token(), public.create_health_token(), public.delete_health_token() from public, anon;
+grant execute on function public.get_health_token(), public.create_health_token(), public.delete_health_token() to authenticated;
