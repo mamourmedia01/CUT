@@ -69,7 +69,7 @@ if (!d || d.error) {
   }
   w.addSpacer();
   txt(w, d.protein ? "Protein day: " + (d.shake || "shake") : "Next shake " + nice(d.nextShake), 11, { med: true, color: d.protein ? AMBER : Color.white() });
-  txt(w, "Week target " + d.weekTarget + " kg · " + d.toGo + " kg to " + d.goal, 11, { color: GREY });
+  txt(w, "Sunday ≈ " + d.weekTarget + " kg · " + d.toGo + " kg to " + d.goal, 11, { color: GREY });
 }
 
 Script.setWidget(w);

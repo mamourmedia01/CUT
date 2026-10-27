@@ -1,7 +1,11 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
-const VERSION = 'cutlog-v21';
+// V is bumped on every release (scripts/bump.sh), together with the ?v= on each file in index.html,
+// so a new page can never run with an old script.
+const V = '22';
+const VERSION = 'cutlog-v' + V;
 const SHELL = [
-  './', './index.html', './health.js', './food/foods.js', './body.js', './health-import-worker.js', './vendor/fflate.min.js', './app.js', './store.js', './config.js', './manifest.webmanifest',
+  './', './index.html', './manifest.webmanifest', './vendor/fflate.min.js', './health-import-worker.js',
+  ...['config.js', 'store.js', 'food/foods.js', 'health.js', 'body.js', 'app.js'].map(f => './' + f + '?v=' + V),
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js'
 ];
@@ -34,13 +38,19 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match('./index.html')));
     return;
   }
-  // Everything else: cache first, then network (and remember it).
+  // The app's own files: network first (always the version that matches the page), cache when offline.
+  if (url.origin === location.origin) {
+    e.respondWith(fetch(req).then(r => { if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return r; })
+      .catch(() => caches.match(req).then(hit => hit || caches.match(req, { ignoreSearch: true }))));
+    return;
+  }
+  // Versioned libraries and fonts: cache first, then network (and remember it).
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => {
-    if (r.ok && (url.origin === location.origin || url.hostname.includes('fonts.g') || url.hostname === 'cdn.jsdelivr.net')) {
+    if (r.ok && (url.hostname.includes('fonts.g') || url.hostname === 'cdn.jsdelivr.net')) {
       const copy = r.clone(); caches.open(VERSION).then(c => c.put(req, copy));
     }
     return r;
-  }).catch(() => hit)));
+  })));
 });
 
 // Push notifications (sent by the scheduled GitHub Action once Supabase is connected).

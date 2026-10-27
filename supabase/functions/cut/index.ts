@@ -13,7 +13,7 @@
 
 const APP_PATH = './#log';
 const CONTACT = 'mailto:mamourmedia01@gmail.com';
-const PLAN_DEFAULT = { start: '2026-10-14', proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, shake: '5 scoops in 500 ml water', baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, autoHour: 12 };
+const PLAN_DEFAULT = { waterGoal: 3000, start: '2026-10-14', proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, shake: '5 scoops in 500 ml water', baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, autoHour: 12 };
 
 // ---------- base64url ----------
 export const b64u = (buf) => { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
@@ -105,6 +105,7 @@ export function streak(plan, days, todayId) {
 const H = (r, k) => r && r.health && typeof r.health[k] === 'number' ? r.health[k] : null;
 function sessOf(r) {
   const u = (r.am ? 1 : 0) + (r.pm ? 1 : 0); if (u) return u;
+  if (r.noGym) return 0;
   const w = H(r, 'workouts'); if (w != null) return Math.min(2, Math.round(w));
   const ex = H(r, 'exercise_min'); return ex == null ? 0 : ex >= 90 ? 2 : ex >= 20 ? 1 : 0;
 }
@@ -125,24 +126,22 @@ const merge = (days, health) => { const o = {}; new Set([...Object.keys(days), .
 export function estimate(planIn, all, todayId) {
   const plan = Object.assign({}, PLAN_DEFAULT, planIn || {});
   const prot = proteinDays(plan, all, todayId);
-  let est = +plan.startWeight || 0, morning = est, weighed = null;
+  let est = +plan.startWeight || 0, morning = est, weighed = null; const recent = [];
   for (let n = toN(plan.start); n <= toN(todayId); n++) {
     const id = toId(n), r = all[id] || {};
     const w = r.weight != null ? +r.weight : H(r, 'weight_kg');
     if (w != null) { est = w; weighed = id; }
     morning = est;
-    const kg = dayKg(plan, r, !!prot[id]); if (kg != null) est -= kg;
+    const kg = dayKg(plan, r, !!prot[id]); if (kg != null) { est -= kg; if (n >= toN(todayId) - 7 && n < toN(todayId)) recent.push(kg); }
   }
-  const days = Math.max(1, toN(todayId) - toN(plan.start));
-  return { morning, tomorrow: est, weighed, pace: (plan.startWeight - morning) / days };
+  const days = Math.max(1, toN(todayId) - toN(plan.start)), overall = (plan.startWeight - morning) / days;
+  return { morning, tomorrow: est, weighed, pace: recent.length >= 3 ? recent.reduce((a, b) => a + b, 0) / recent.length : overall };
 }
-// end of the cut-week (weeks run from the start date) that is still ahead, and the weight there at the current pace
+// Sunday weigh-in: this calendar week's Sunday morning (next Sunday if today is Sunday), at the last 7 days' pace
 export function weekTarget(planIn, all, todayId) {
   const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), e = estimate(plan, all, todayId);
-  const k = toN(todayId) - toN(plan.start); let end = toN(plan.start) + Math.floor(k / 7) * 7 + 6;
-  if (end <= toN(todayId)) end += 7;
-  const left = end - toN(todayId); // mornings after tomorrow until the morning after `end`
-  return { endId: toId(end), kg: e.tomorrow - Math.max(0, e.pace) * left, est: e };
+  const dow = new Date(toN(todayId) * 864e5).getUTCDay(), toSun = (7 - dow) % 7 || 7;
+  return { endId: toId(toN(todayId) + toSun), kg: e.tomorrow - Math.max(0, e.pace) * (toSun - 1), est: e };
 }
 
 // Morning: recovery (once today's HRV is in), protein day, Sunday check-in.
@@ -171,6 +170,7 @@ export function eveningPush(planIn, days, health, prefs, now) {
   const bits = [], sess = sessOf(r), act = H(r, 'active_kcal'), steps = H(r, 'steps');
   if (sess) bits.push(sess === 2 ? 'Double session' : '1 session');
   if (Array.isArray(r.meals) && r.meals.length) bits.push(r.meals.length + ' meal' + (r.meals.length > 1 ? 's' : '') + ' logged');
+  if (r.water) bits.push('water ' + (r.water / 1000).toFixed(1) + ' of ' + (plan.waterGoal / 1000).toFixed(1) + ' L');
   if (act != null) bits.push(kf(act) + ' active kcal');
   if (steps != null) bits.push(kf(steps) + ' steps');
   const kg = dayKg(plan, Object.assign({}, r, { mark: r.mark || (plan.autopilot !== false ? 'done' : null) }), !!prot[now.id]);
@@ -185,6 +185,14 @@ export function eveningPush(planIn, days, health, prefs, now) {
   else lines.push(run ? 'Tap today in to make it ' + (run + 1) + '.' : 'Tap today in and start the run.');
   if (p.protein !== false && prot[tomorrow] && (all[tomorrow] || {}).protein == null) lines.push('Tomorrow is a protein day.');
   return { title, body: lines.join(' '), url: './#log', tag: 'evening' };
+}
+
+// Afternoon water check, only for people who log water (any in the last 3 days) and are behind.
+export function waterPush(planIn, days, now) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), t = (days[now.id] || {}).water || 0;
+  const uses = [1, 2, 3].some(i => (days[toId(toN(now.id) - i)] || {}).water) || t > 0;
+  if (!uses || t >= plan.waterGoal / 2) return null;
+  return { title: 'Water check', body: (t / 1000).toFixed(1) + ' of ' + (plan.waterGoal / 1000).toFixed(1) + ' L so far. Get a 500 ml bottle in, with a pinch of salt.', url: './#home', tag: 'water' };
 }
 
 // Sunday evening: the week in one push (the same numbers as the brief on Home).
@@ -204,9 +212,10 @@ export function weeklyBrief(planIn, days, health, now, lastImport, name) {
   if (sl != null) h.push('sleep ' + sl.toFixed(1) + ' h');
   if (hrv != null) h.push('HRV ' + Math.round(hrv));
   if (h.length) lines.push(h.join(', ') + '.');
+  const wl = ids.map(id => (all[id] || {}).water).filter(v => v); if (wl.length) lines.push('Water ' + (wl.reduce((a, b) => a + b, 0) / wl.length / 1000).toFixed(1) + ' L a day.');
   if (next) lines.push('Next shake ' + niceId(next) + '.');
   if (!lastImport || Date.now() - Date.parse(lastImport) > 8 * 864e5) lines.push('Tip: refresh your Health history for sleep stages.');
-  const wt = weekTarget(plan, all, now.id); lines.push('This week’s target: ' + wt.kg.toFixed(1) + ' kg by ' + niceId(toId(toN(wt.endId) + 1)) + '.');
+  const wt = weekTarget(plan, all, now.id); lines.push('Next Sunday’s weigh-in: about ' + wt.kg.toFixed(1) + ' kg.');
   return { title: (name ? name + ', your' : 'Your') + ' week in review', body: lines.join(' '), url: './#home', tag: 'weekly', stats: { done, cheats, sess, kg, shakes, rec, recP, sl, hrv, next } };
 }
 
@@ -444,6 +453,7 @@ async function run(db, keys, opts = {}) {
       const m = now.sunday && p.weekly !== false ? weeklyBrief(plan, dd, hh, now, lastImport[uid], names[uid]) : eveningPush(plan, dd, hh, p, now);
       if (m) due.push(['evening', m]); else sent.evening = now.id;
     }
+    if (p.water !== false && sent.water !== now.id && inWin(15, 3)) { const m = waterPush(plan, dd, now); if (m) due.push(['water', m]); }
     if (p.weekly !== false && now.id.endsWith('-01') && sent.monthly !== now.id && inWin(eh, 3)) { const m = monthlyBrief(plan, dd, hh, now, names[uid]); if (m) due.push(['monthly', m]); else sent.monthly = now.id; }
     if (p.milestone !== false && inWin(9, 13)) {
       const ms = milestone(plan, merge(dd, hh), now.id, sent.ms, names[uid]);
@@ -580,7 +590,7 @@ async function widget(db, q) {
     sleep: t.sleep != null ? Math.round(t.sleep * 10) / 10 : (y.sleep != null ? Math.round(y.sleep * 10) / 10 : null),
     protein: !!prot[now.id], nextShake: next || null, shake: plan.shake,
     weight: Math.round(wt.est.morning * 10) / 10, tomorrow: Math.round(wt.est.tomorrow * 10) / 10,
-    weekEnd: wt.endId, weekBy: toId(toN(wt.endId) + 1), weekTarget: Math.round(wt.kg * 10) / 10, goal: plan.goal, toGo: Math.max(0, Math.round((wt.est.morning - plan.goal) * 10) / 10),
+    weekEnd: wt.endId, weekBy: wt.endId, weekTarget: Math.round(wt.kg * 10) / 10, goal: plan.goal, toGo: Math.max(0, Math.round((wt.est.morning - plan.goal) * 10) / 10),
     updated: new Date().toISOString()
   });
 }

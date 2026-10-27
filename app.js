@@ -13,7 +13,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const SHAKE = '<svg class="shake" viewBox="0 0 20 26" aria-hidden="true"><path d="M6 0h8v4l2 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7l2-3z"/></svg>';
 
-  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, shake: '5 scoops in 500 ml water', autoHour: 12, bfGoal: 15 };
+  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, shake: '5 scoops in 500 ml water', autoHour: 12, bfGoal: 15, waterGoal: 3000 };
   const LEVELS = [[0, 'Rookie'], [400, 'Starter'], [1000, 'Grinder'], [2000, 'Machine'], [3500, 'Warrior'], [5500, 'Beast'], [8000, 'Shredded'], [11000, 'Legend']];
   const BADGES = [
     { m: '1', name: 'First Step', desc: 'First completed day', test: s => s.done >= 1 },
@@ -31,6 +31,7 @@
   ];
 
   const plan = () => Store.plan;
+  const SW_V = (document.querySelector('script[src^="app.js?v="]') || { getAttribute: () => '' }).getAttribute('src').split('v=')[1] || '0';
   const days = () => Store.days;
   let today = new Date();
   let viewY = today.getFullYear(), viewM = today.getMonth();
@@ -38,12 +39,12 @@
   let last = null;
   let mode = 'day'; try { const m = localStorage.getItem('cutlog-mode'); if (m === 'day' || m === 'gym' || m === 'details') mode = m; } catch (e) {}
 
-  const rec = id => Object.assign({ meals: null, mark: null, broken: false, am: false, pm: false, weight: null, waist: null, curl: null, chest: null, protein: null, gymKcal: null, food: null, health: null }, days()[id] || {});
+  const rec = id => Object.assign({ lifts: null, water: null, salt: false, meals: null, mark: null, broken: false, am: false, pm: false, weight: null, waist: null, curl: null, chest: null, protein: null, gymKcal: null, food: null, health: null }, days()[id] || {});
   const H = (r, k) => (r.health && typeof r.health[k] === 'number') ? r.health[k] : null;
   const userSess = r => (r.am ? 1 : 0) + (r.pm ? 1 : 0);
   // Watch sessions: real workouts (Health import) if known, else from Exercise Minutes (20+ = 1 session, 90+ = 2).
   const watchSess = r => {
-    if (userSess(r)) return 0;
+    if (userSess(r) || r.noGym) return 0; // noGym: you said no session, whatever the watch thinks
     const w = H(r, 'workouts'); if (w != null) return Math.min(2, Math.round(w));
     const ex = H(r, 'exercise_min'); return ex == null ? 0 : ex >= 90 ? 2 : ex >= 20 ? 1 : 0;
   };
@@ -162,12 +163,14 @@
     const dTm = st.est - st.tomorrow;
     $('wake').textContent = st.tomorrow.toFixed(1) + ' kg';
     $('wakeD').textContent = Math.abs(dTm) >= 0.05 ? (dTm > 0 ? '−' : '+') + Math.abs(dTm).toFixed(2) + ' kg overnight' : 'about the same';
-    // end of the cut-week still ahead (weeks run from your start date, like the weekly report)
-    const k = Math.max(0, diff(s, today)); let wEnd = addDays(s, Math.floor(k / 7) * 7 + 6); if (diff(today, wEnd) <= 0) wEnd = addDays(wEnd, 7);
-    const wNo = Math.floor(diff(s, wEnd) / 7) + 1, mornings = diff(today, wEnd), wkKg = st.tomorrow - Math.max(0, pd) * mornings;
-    $('wkTgtLbl').textContent = 'End of week ' + wNo;
-    $('wkTgt').textContent = (pd > 0.01 ? wkKg : st.tomorrow).toFixed(1) + ' kg';
-    $('wkTgtD').textContent = 'by ' + addDays(wEnd, 1).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' morning' + (pd > 0.01 ? ' · −' + (st.est - wkKg).toFixed(1) + ' kg' : '');
+    // Sunday weigh-in: this calendar week's Sunday morning (next Sunday if it's Sunday already), at your last 7 days' pace
+    const toSun = (7 - today.getDay()) % 7 || 7, sun = addDays(today, toSun);
+    const rk = []; for (let i = 1; i <= 7; i++) { const id = idOf(addDays(today, -i)); if (id < p.start) break; const en = energy(id, rec(id), st.prot); if (en) rk.push(en.kg); }
+    const pace7 = rk.length >= 3 ? rk.reduce((a, b) => a + b, 0) / rk.length : pd;
+    const sunKg = st.tomorrow - Math.max(0, pace7) * (toSun - 1);
+    $('wkTgtLbl').textContent = 'Sunday weigh-in';
+    $('wkTgt').textContent = sunKg.toFixed(1) + ' kg';
+    $('wkTgtD').textContent = sun.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' morning · −' + Math.max(0, st.est - sunKg).toFixed(1) + ' kg from today';
     $('perDay').textContent = pd.toFixed(2); $('perWeek').textContent = (pd * 7).toFixed(1);
     $('eta').textContent = left <= 0 ? 'Done' : (pd > 0.01 ? fmt(addDays(today, Math.ceil(left / pd))) : '–');
   }
@@ -205,7 +208,7 @@
       tb.appendChild(tr);
     }
     renderChart(st);
-    renderMilestones(st); renderMonths(st);
+    renderMilestones(st); renderMonths(st); renderStrength();
   }
 
   // ---------- milestones: every 5 kg, and the goal ----------
@@ -382,7 +385,10 @@
     $('waistField').classList.toggle('hl', sunday && r.waist == null);
     setSeg($('segMark'), { done: r.mark === 'done', cheat: r.mark === 'cheat', broken: r.broken });
     $('autoNote').hidden = !(r.auto && r.mark === 'done');
-    setSeg($('segGym'), { am: r.am, pm: r.pm });
+    const gn = sessOf(r), fromW = !userSess(r) && gn > 0;
+    $('gymBtn').dataset.n = gn; $('gymBtn').setAttribute('aria-pressed', String(gn > 0));
+    $('gymTxt').textContent = gn === 2 ? 'Double session' : gn === 1 ? '1 session' : 'No session';
+    $('gymSub').textContent = (fromW ? 'From your Apple Watch. ' : '') + (gn === 0 ? 'Tap once for 1 session, twice for a double' : gn === 1 ? 'Tap again for a double' : 'Tap again to clear');
     const ws = watchSess(r);
     $('watchNote').hidden = !ws && !r.health;
     if (r.health) $('watchNote').textContent = ws ? 'Apple Watch logged ' + ws + ' workout' + (ws > 1 ? 's' : '') + '. Tap a session to set it yourself.' : 'Apple Watch data synced for this day.';
@@ -399,7 +405,7 @@
     const en = energy(sel, r, st.prot), sess = sessOf(r);
     $('fGym').placeholder = H(r, 'active_kcal') != null ? kfmt(H(r, 'active_kcal')) + ' (watch)' : (sess ? kfmt(sess * p.sessionKcal) + ' (auto)' : kfmt(p.sessionKcal) + ' a session');
     $('fFood').placeholder = en && en.meals != null ? kfmt(en.food) + ' (meals)' : (r.mark === 'cheat' ? kfmt(en ? en.rest : p.baseBurn) : (taken ? kfmt(p.proteinKcal) : '0')) + ' (auto)';
-    renderMeals(r);
+    renderMeals(r); renderWater($('sheetWater'), sel); renderLifts(r);
     const e = $('energy');
     const extra = [];
     if (H(r, 'steps') != null) extra.push(kfmt(H(r, 'steps')) + ' steps');
@@ -474,8 +480,10 @@
     $('agenda').innerHTML = items.map(([c, ic, t, sub, btn], i) => { if (btn) agendaActs[i] = items[i][5];
       return '<li><span class="ic ' + c + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ic + '</svg></span><div><b>' + esc(t) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>' + (btn ? '<button class="btn" type="button" data-ag="' + i + '">' + esc(btn) + '</button>' : '') + '</li>'; }).join('');
     $('todayCard').hidden = false;
+    renderWater($('homeWater'), tId);
   }
-  $('homeMeal').addEventListener('click', () => { sel = idOf(today); $('mealInput').click(); show('log'); });
+  // a <label for=mealInput>: the iPhone opens the camera/library itself; we just move to today's Log
+  $('homeMeal').addEventListener('click', () => { sel = idOf(today); show('log'); render(); });
   $('homeBody').addEventListener('click', () => show('body'));
   $('meChip').addEventListener('click', () => { show('settings'); setTimeout(() => { $('acct').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); });
   $('agenda').addEventListener('click', e => { const b = e.target.closest('[data-ag]'); if (b && agendaActs[b.dataset.ag]) agendaActs[b.dataset.ag](); });
@@ -499,7 +507,8 @@
       tile(sl != null ? sl.toFixed(1) : '–', 'h sleep', delta(sl, slP, 1, ' h')) +
       tile(hv != null ? Math.round(hv) : '–', 'ms HRV', delta(hv, hvP, 0));
     const next = Object.keys(st.prot).filter(id => id > idOf(today) && st.prot[id].taken).sort()[0];
-    $('wkLine').textContent = shakes + ' protein shake' + (shakes === 1 ? '' : 's') + ' this week' + (next ? ' · next ' + dayName(parseId(next)) : '') + '. Arrows compare with the week before.';
+    const wl = inCut.map(id => rec(id).water).filter(v => v), wavg = wl.length ? wl.reduce((a, b) => a + b, 0) / wl.length : null;
+    $('wkLine').textContent = shakes + ' protein shake' + (shakes === 1 ? '' : 's') + ' this week' + (next ? ' · next ' + dayName(parseId(next)) : '') + (wavg ? ' · water ' + L(Math.round(wavg / 50) * 50) + ' L a day on ' + wl.length + ' day' + (wl.length > 1 ? 's' : '') : '') + '. Arrows compare with the week before.';
     $('wkRange').textContent = fmt(parseId(inCut[0])) + ' – ' + fmt(today);
     $('weekCard').hidden = false;
   }
@@ -577,25 +586,38 @@
     try { await navigator.clipboard.writeText(k.dataset.copy); k.classList.add('copied'); setTimeout(() => k.classList.remove('copied'), 1200); toast('Copied “' + esc(k.dataset.copy) + '”'); }
     catch (err) { toast('Copy didn’t work here: type it instead.'); }
   });
-  let bhMetric = 'recovery', bhRange = 30;
-  try { const j = JSON.parse(localStorage.getItem('cutlog-bh') || 'null'); if (j) { bhMetric = j.m || bhMetric; bhRange = j.r != null ? j.r : bhRange; } } catch (e) {}
+  let bhMetric = 'recovery', bhRange = 30, bhPicked = false;
+  try { const j = JSON.parse(localStorage.getItem('cutlog-bh') || 'null'); if (j && j.picked) { bhMetric = j.m || bhMetric; bhRange = j.r != null ? j.r : bhRange; bhPicked = true; } } catch (e) {}
   function renderBodyHist() {
     const CH = window.CutHealth; if (!CH) return;
     const ds = days(), ids = Object.keys(ds).filter(id => ds[id] && ds[id].health);
-    $('bodyHist').hidden = !ids.length; if (!ids.length) return;
-    const avail = Object.keys(CH.METRICS).filter(k => ids.some(id => { const v = CH.METRICS[k].get(ds[id].health, bodyScores[id]); return typeof v === 'number'; }));
-    if (!avail.includes(bhMetric)) bhMetric = avail[0] || 'steps';
+    $('bodyHist').hidden = false;
+    if (!ids.length) {
+      $('bhMetric').innerHTML = ''; $('bhBig').textContent = '–'; $('bhUnit').textContent = ''; $('bhDelta').hidden = true; $('bhStats').innerHTML = '';
+      $('bhSum').textContent = ''; $('bhChart').innerHTML = '<p class="note">Your trends appear here once your Apple Watch syncs: recovery, sleep, strain, HRV, resting heart rate, steps and weight. Set it up in Settings → Apple Watch, or import your Apple Health history for months of trends at once.</p>';
+      return;
+    }
+    // most important first; only measures that have data
+    const ORDER = ['recovery', 'sleep', 'strain', 'hrv', 'rhr', 'weight', 'bodyfat', 'steps', 'active', 'vo2'];
+    const has = (k, from) => ids.some(id => (!from || id >= from) && typeof CH.METRICS[k].get(ds[id].health, bodyScores[id]) === 'number');
+    const avail = ORDER.filter(k => CH.METRICS[k] && has(k)).concat(Object.keys(CH.METRICS).filter(k => !ORDER.includes(k) && has(k)));
+    // default view: the most important measure with data in the last 30 days (until you pick one yourself)
+    const d30 = idOf(addDays(today, -29));
+    if (!bhPicked || !avail.includes(bhMetric)) { bhMetric = avail.find(k => has(k, d30)) || avail[0]; if (!bhPicked) bhRange = 30; }
     $('bhMetric').innerHTML = avail.map(k => '<button type="button" data-m="' + k + '" aria-pressed="' + (k === bhMetric) + '">' + CH.METRICS[k].name + '</button>').join('');
-    $('bhRange').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.r === bhRange)));
-    const r = CH.chart($('bhChart'), ds, bodyScores, bhMetric, bhRange, idOf(today));
+    // nothing in the chosen period? widen it rather than show an empty chart
+    let r = CH.chart($('bhChart'), ds, bodyScores, bhMetric, bhRange, idOf(today)), widened = null;
+    for (const rr of [90, 365, 0]) { if (r || (bhRange !== 0 && rr !== 0 && rr <= bhRange)) continue; r = CH.chart($('bhChart'), ds, bodyScores, bhMetric, rr, idOf(today)); if (r) widened = rr; }
+    const shownRange = widened != null ? widened : bhRange;
+    $('bhRange').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.r === shownRange)));
     const M = CH.METRICS[bhMetric], u = M.unit ? ' ' + M.unit : '';
     const short = id => +id.slice(8, 10) + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+id.slice(5, 7) - 1];
-    const period = bhRange === 30 ? '30 days' : bhRange === 90 ? '90 days' : bhRange === 365 ? '12 months' : 'all time';
+    const period = shownRange === 30 ? '30 days' : shownRange === 90 ? '90 days' : shownRange === 365 ? '12 months' : 'all time';
     const dl = $('bhDelta');
     if (!r) { $('bhBig').textContent = '–'; $('bhUnit').textContent = ''; $('bhSum').textContent = M.name + ' · ' + period; dl.hidden = true; $('bhStats').innerHTML = ''; return; }
     $('bhBig').textContent = CH.fmtN(r.avg, r.dp);
     $('bhUnit').textContent = M.unit;
-    $('bhSum').textContent = M.name + ' average · ' + (bhRange ? 'last ' + period : 'since ' + short(r.firstId)) + ' · ' + r.n + ' day' + (r.n === 1 ? '' : 's') + ' logged';
+    $('bhSum').textContent = M.name + ' average · ' + (shownRange ? 'last ' + period : 'since ' + short(r.firstId)) + (widened != null ? ' (nothing in the last ' + (bhRange === 30 ? '30 days' : bhRange === 90 ? '90 days' : '12 months') + ')' : '') + ' · ' + r.n + ' day' + (r.n === 1 ? '' : 's') + ' logged';
     if (r.prevAvg != null && r.prevAvg !== 0) {
       const diff = r.avg - r.prevAvg, pct = diff / Math.abs(r.prevAvg) * 100, flat = Math.abs(pct) < 1;
       const good = M.better ? diff * M.better > 0 : null;
@@ -609,7 +631,7 @@
     const cell = (lbl, v, sub) => '<div><span>' + lbl + '</span><b>' + CH.fmtN(v, r.dp) + '</b><small>' + sub + '</small></div>';
     $('bhStats').innerHTML = cell('Latest', r.last, r.lastId === idOf(today) ? 'Today' : short(r.lastId)) + cell(M.better ? hiLbl : 'High', hiP.v, short(hiP.id)) + cell(loLbl, loP.v, short(loP.id));
   }
-  const saveBh = () => { try { localStorage.setItem('cutlog-bh', JSON.stringify({ m: bhMetric, r: bhRange })); } catch (e) {} };
+  const saveBh = () => { bhPicked = true; try { localStorage.setItem('cutlog-bh', JSON.stringify({ m: bhMetric, r: bhRange, picked: true })); } catch (e) {} };
   $('bhMetric').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; bhMetric = b.dataset.m; saveBh(); renderBodyHist(); });
   $('bhRange').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; bhRange = +b.dataset.r; saveBh(); renderBodyHist(); });
 
@@ -711,8 +733,11 @@
   $('segMark').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v;
     if (v === 'broken') { hold(sel); return; }
     setMark(sel, rec(sel).mark === v ? null : v); });
-  $('segGym').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v;
-    const on = !rec(sel)[v]; change(sel, r => { r[v] = on; }, on ? 'Session logged' : 'Session removed'); });
+  // one button: tap → 1 session, tap again → double, tap again → none (starts from what's shown, watch included)
+  $('gymBtn').addEventListener('click', () => {
+    const n = (sessOf(rec(sel)) + 1) % 3;
+    change(sel, r => { r.am = n >= 1; r.pm = n >= 2; delete r.noGym; if (n === 0 && watchSess(r) > 0) r.noGym = true; }, n === 2 ? 'Double session' : n === 1 ? '1 session' : 'Sessions cleared');
+  });
   $('segProt').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
     const pr = last.prot[sel], taken = !!(pr && pr.taken), due = !!(pr && (pr.status === 'scheduled' || pr.status === 'skipped')), nt = !taken;
     change(sel, r => { r.protein = (nt === due) ? null : nt; }, nt ? 'Protein logged' : 'Protein removed'); });
@@ -841,6 +866,223 @@
     });
   }
 
+  // ---------- workout: exercises, sets × reps ----------
+  const EXERCISES = ['Chest press', 'Incline press', 'Shoulder press', 'Lat pulldown', 'Seated row', 'Bicep curl', 'Tricep pushdown', 'Squat', 'Leg press', 'Leg extension', 'Hamstring curl', 'Deadlift', 'Lunges', 'Pull-ups', 'Press-ups', 'Dips'];
+  const LINKED = { 'Bicep curl': 'curl', 'Chest press': 'chest' }; // feed the existing PB + strength alarm
+  const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 15) / 30);       // Epley
+  const setTxt = s => (s[0] ? s[0] + ' kg' : 'body') + ' × ' + s[1];
+  (function fillLifts() { const sel = $('liftPick'); sel.innerHTML = EXERCISES.map(e => '<option>' + esc(e) + '</option>').join('') + '<option value="__custom">Something else…</option>'; })();
+  // the last time you did an exercise before `id`, and your best ever before `id`
+  function liftHistory(name, beforeId) {
+    let last = null, best = 0;
+    Object.keys(days()).filter(d => d < beforeId).sort().forEach(d => { const L = (days()[d].lifts || []).find(x => x.e === name); if (L && L.s.length) { last = { id: d, s: L.s }; L.s.forEach(s => { best = Math.max(best, e1rm(s[0], s[1])); }); } });
+    return { last, best };
+  }
+  function renderLifts(r) {
+    const ls = Array.isArray(r.lifts) ? r.lifts : [];
+    let sets = 0, vol = 0;
+    $('liftList').innerHTML = ls.map((L, i) => {
+      const h = liftHistory(L.e, sel); let best = h.best;
+      const chips = L.s.map((s, j) => { sets++; vol += s[0] * s[1]; const v = e1rm(s[0], s[1]), pb = h.last && v > best + 0.01; if (pb) best = v; return '<span class="' + (pb ? 'pb' : '') + '">' + esc(setTxt(s)) + (pb ? ' · PB' : '') + '<button type="button" data-lact="delset" data-i="' + i + '" data-j="' + j + '" aria-label="Remove set">✕</button></span>'; }).join('');
+      const prev = L.s[L.s.length - 1] || (h.last && h.last.s[0]) || [0, 10];
+      return '<div class="lift" data-i="' + i + '"><div class="lh"><b>' + esc(L.e) + '</b><button type="button" data-lact="delex" data-i="' + i + '" aria-label="Remove ' + esc(L.e) + '">✕</button></div>' +
+        (h.last ? '<div class="last">Last time ' + esc(fmt(parseId(h.last.id))) + ': ' + esc(h.last.s.map(setTxt).join(', ')) + '</div>' : '<div class="last">First time logged: this sets your baseline.</div>') +
+        (chips ? '<div class="sets">' + chips + '</div>' : '') +
+        '<div class="addset"><input type="number" inputmode="decimal" step="0.5" min="0" max="500" placeholder="kg" value="' + prev[0] + '" aria-label="Weight kg"><input type="number" inputmode="numeric" step="1" min="1" max="100" placeholder="reps" value="' + prev[1] + '" aria-label="Reps"><button class="btn primary" type="button" data-lact="addset" data-i="' + i + '">+ Set</button></div></div>';
+    }).join('');
+    $('liftSum').textContent = sets ? sets + ' set' + (sets > 1 ? 's' : '') + ' · ' + kfmt(vol) + ' kg moved' : '';
+  }
+  $('liftPick').addEventListener('change', () => { $('liftCustom').hidden = $('liftPick').value !== '__custom'; if (!$('liftCustom').hidden) $('liftCustom').focus(); });
+  $('liftAdd').addEventListener('click', () => {
+    let name = $('liftPick').value;
+    if (name === '__custom') { name = $('liftCustom').value.trim().slice(0, 40); if (!name) { $('liftCustom').hidden = false; $('liftCustom').focus(); toast('Type the exercise name'); return; } $('liftCustom').value = ''; }
+    if ((rec(sel).lifts || []).some(L => L.e === name)) { toast(esc(name) + ' is already on today'); return; }
+    change(sel, r => { r.lifts = (r.lifts || []).concat([{ e: name, s: [] }]); }, name + ' added');
+  });
+  $('liftList').addEventListener('click', e => {
+    const b = e.target.closest('[data-lact]'); if (!b) return;
+    const i = +b.dataset.i, act = b.dataset.lact;
+    if (act === 'addset') {
+      const box = b.closest('.lift'), ins = box.querySelectorAll('input'), kg = num(ins[0].value), reps = num(ins[1].value);
+      if (kg == null || kg < 0 || !reps || reps < 1) { toast('Enter the weight and reps'); return; }
+      const name = rec(sel).lifts[i].e, h = liftHistory(name, sel), soFar = rec(sel).lifts[i].s.reduce((m, s) => Math.max(m, e1rm(s[0], s[1])), 0);
+      const pb = h.last && e1rm(kg, Math.round(reps)) > Math.max(h.best, soFar) + 0.01;
+      change(sel, r => {
+        r.lifts = r.lifts.map((L, k) => k === i ? { e: L.e, s: L.s.concat([[kg, Math.round(reps)]]) } : L);
+        const f = LINKED[name]; if (f) { const top = Math.max(...r.lifts[i].s.map(s => s[0])); if (r[f] == null || top > r[f]) r[f] = top; }
+        if (!userSess(r) && !watchSess(r)) r.am = true; // lifting today counts as a session
+      }, pb ? 'New personal best · ' + name : 'Set logged');
+    } else if (act === 'delset') {
+      const j = +b.dataset.j;
+      change(sel, r => { r.lifts = r.lifts.map((L, k) => k === i ? { e: L.e, s: L.s.filter((_, q) => q !== j) } : L); }, 'Set removed');
+    } else if (act === 'delex') {
+      change(sel, r => { const l = r.lifts.filter((_, k) => k !== i); r.lifts = l.length ? l : null; }, 'Exercise removed');
+    }
+  });
+  // Stats: best set per exercise
+  function renderStrength() {
+    const by = {};
+    Object.keys(days()).sort().forEach(d => (days()[d].lifts || []).forEach(L => L.s.forEach(s => {
+      const b = by[L.e] || (by[L.e] = { best: null, e: 0, last: d });
+      const v = e1rm(s[0], s[1]); if (v > b.e) { b.e = v; b.best = s; } b.last = d;
+    })));
+    const names = Object.keys(by).sort((a, b) => by[b].last.localeCompare(by[a].last));
+    $('strCount').textContent = names.length ? names.length + ' exercise' + (names.length > 1 ? 's' : '') : '';
+    $('strRows').innerHTML = names.length ? names.map(n => '<tr><td><div class="wk" style="font-size:.95rem">' + esc(n) + '</div></td><td>' + esc(setTxt(by[n].best)) + '</td><td>' + (by[n].best[0] ? Math.round(by[n].e) + ' kg' : '–') + '</td><td>' + esc(fmt(parseId(by[n].last))) + '</td></tr>').join('')
+      : '<tr><td colspan="4" class="muted" style="padding:12px 0;color:var(--muted)">No lifts logged yet. Open Log, pick today and add an exercise.</td></tr>';
+  }
+
+  // ---------- coach: questions answered from your own numbers (on the phone, free, works offline) ----------
+  const CQ = [
+    { k: 'today', re: /\b(today|train|training|workout|session|gym|what should i do|plan)\b/ },
+    { k: 'whatif', re: /\b(what if|if i (eat|have|ate|drink))\b|\d+\s*(k?cal|calories)/ },
+    { k: 'weight', re: /\b(weigh|weight|kg|lost|lose|losing|85|goal|when will|eta|pace|sunday|scale)\b/ },
+    { k: 'sleep', re: /\b(sleep|slept|bed|tired|nap|rest)\b/ },
+    { k: 'recovery', re: /\b(recover|recovery|hrv|resting heart|rhr|ready|readiness|strain)\b/ },
+    { k: 'protein', re: /\b(protein|shake|scoop)\b/ },
+    { k: 'water', re: /\b(water|drink|hydrat|electrolyte|salt)\b/ },
+    { k: 'food', re: /\b(food|eat|ate|meal|cheat|calorie|kcal|hungry|diet)\b/ },
+    { k: 'strength', re: /\b(strength|strong|lift|lifts|lifting|pbs?|records?|bests|personal best|bench|chest|curl|press|squat|1rm)\b/ },
+    { k: 'streak', re: /\b(streak|boss|xp|level|badge|testosterone)\b/ },
+    { k: 'fat', re: /\b(body ?fat|fat %|bf|lean|muscle)\b/ },
+    { k: 'week', re: /\b(week|weekly|month|progress|how am i doing|how.?s it going|summary|overall)\b/ }
+  ];
+  const b1 = v => '<b>' + v + '</b>';
+  function coachCtx() {
+    const st = last || compute(), p = plan(), tId = idOf(today), CH = window.CutHealth;
+    const sc = bodyScores[tId] || {}, scY = bodyScores[idOf(addDays(today, -1))] || {};
+    const s = parseId(p.start), nd = Math.max(1, diff(s, today)), lost = p.startWeight - st.est, pace = lost / nd;
+    const rk = []; for (let i = 1; i <= 7; i++) { const id = idOf(addDays(today, -i)); if (id < p.start) break; const en = energy(id, rec(id), st.prot); if (en) rk.push(en.kg); }
+    const pace7 = rk.length >= 3 ? rk.reduce((a, b) => a + b, 0) / rk.length : pace;
+    return { st, p, tId, CH, sc: sc.recovery != null || sc.sleep != null ? sc : Object.assign({}, scY, sc), lost, pace, pace7 };
+  }
+  function coachAnswer(q0) {
+    const q = ' ' + q0.toLowerCase() + ' ', c = coachCtx(), { st, p, tId, CH } = c, out = [];
+    const hits = CQ.filter(x => x.re.test(q)).map(x => x.k);
+    // a named topic beats the generic "today" / "week" words: "water today" is about water
+    const k = hits.includes('whatif') ? 'whatif' : hits.find(h => h !== 'today' && h !== 'week') || hits[0];
+    const nextShake = Object.keys(st.prot).filter(id => id > tId && st.prot[id].taken).sort()[0];
+    if (k === 'whatif') {
+      const m = q.match(/(\d[\d,]*)\s*(k?cal|calories)?/); const kcal = m ? +m[1].replace(/,/g, '') : null;
+      if (kcal == null) return '<p>Give me a number, e.g. “what if I eat 1,500 kcal tomorrow?”</p>';
+      const burn = p.baseBurn + p.sessionKcal * Math.max(1, Math.round(st.sessions / Math.max(1, diff(parseId(p.start), today)))), d = burn - kcal, kg = d / p.kcalPerKg;
+      return '<p>On a normal gym day you burn about ' + b1(kfmt(burn) + ' kcal') + '. Eating ' + b1(kfmt(kcal) + ' kcal') + ' leaves a ' + (d >= 0 ? 'deficit' : 'surplus') + ' of ' + b1(kfmt(Math.abs(d)) + ' kcal') + ', about ' + b1((kg >= 0 ? '−' : '+') + Math.abs(kg).toFixed(2) + ' kg') + ' on the next morning’s estimate.</p>' +
+        '<p>Compared with a water day (about −' + ((burn - 0) / p.kcalPerKg).toFixed(2) + ' kg), that costs ' + (kcal / p.kcalPerKg).toFixed(2) + ' kg of progress.</p>';
+    }
+    if (k === 'weight') {
+      const left = Math.max(0, st.est - p.goal), eta = c.pace7 > 0.01 ? addDays(today, Math.ceil(left / c.pace7)) : null;
+      const toSun = (7 - today.getDay()) % 7 || 7, sunKg = st.tomorrow - Math.max(0, c.pace7) * (toSun - 1);
+      out.push('<p>You’re at about ' + b1(st.est.toFixed(1) + ' kg') + ' this morning (' + (st.lastWeigh ? 'last weighed ' + fmt(parseId(st.lastWeigh)) : 'estimate') + '), ' + b1(c.lost.toFixed(1) + ' kg') + ' down from ' + p.startWeight + ' kg.</p>');
+      out.push('<p>Last 7 days you averaged ' + b1((c.pace7 * 7).toFixed(1) + ' kg a week') + '. At that pace: about ' + b1(sunKg.toFixed(1) + ' kg') + ' on Sunday’s weigh-in, and ' + p.goal + ' kg ' + (left <= 0 ? b1('reached') : eta ? 'around ' + b1(fmt(eta)) : 'not yet in sight') + '.</p>');
+      if (left > 0 && c.pace7 * 7 > 2.5) out.push('<p>That’s a fast rate. Keep the protein days and strength work going so it’s fat, not muscle.</p>');
+      return out.join('');
+    }
+    if (k === 'today') {
+      const tp = CH && CH.train ? CH.train(bodyScores[tId] || {}) : null, pr = st.prot[tId];
+      if (tp) out.push('<p>' + b1(tp.name) + '. ' + esc(tp.why) + ' Strain target ' + b1(tp.lo + '–' + tp.hi) + (tp.strain != null ? ', you’re at ' + tp.strain.toFixed(1) + (tp.status === 'hit' ? ': target reached, you can stop.' : tp.status === 'over' ? ': over, keep tomorrow easy.' : '.') : '.') + '</p>' +
+        '<p>Session 1: ' + esc(tp.am[0]) + ' (' + esc(tp.am[1].join('; ')) + ').<br>Session 2: ' + esc(tp.pm[0]) + '.</p>');
+      out.push('<p>' + (pr && pr.taken ? 'It’s a ' + b1('protein day') + ': ' + esc(p.shake || 'your shake') + '.' : 'Water day.' + (nextShake ? ' Next shake ' + esc(dayName(parseId(nextShake))) + '.' : '')) + '</p>');
+      return out.join('');
+    }
+    if (k === 'sleep') {
+      const sc = c.sc;
+      if (sc.sleep == null) return '<p>No sleep recorded for last night yet. It arrives when your watch syncs, or from phone use if you set that up (Settings → Apple Watch).</p>';
+      out.push('<p>Last night: ' + b1(sc.sleep.toFixed(1) + ' h') + ' of the ' + (sc.need || 8).toFixed(1) + ' h you needed' + (sc.sleepSrc === 'capped' ? ' (Health said ' + sc.sleepRaw.toFixed(1) + ' h, corrected by your phone use)' : sc.sleepSrc === 'phone' ? ' (from phone use, the watch was off)' : '') + '.</p>');
+      const sl = []; for (let i = 0; i < 7; i++) { const x = bodyScores[idOf(addDays(today, -i))]; if (x && x.sleep != null) sl.push(x.sleep); }
+      if (sl.length > 2) out.push('<p>7-night average ' + b1((sl.reduce((a, b) => a + b, 0) / sl.length).toFixed(1) + ' h') + (sc.debt ? ', sleep debt ' + sc.debt.toFixed(1) + ' h' : '') + '.</p>');
+      const ins = CH ? CH.insights(days(), bodyScores, id => rec(id).mark === 'cheat', id => rec(id).mark === 'done', id => sessOf(rec(id))).find(i => i.label === 'sleep7') : null;
+      if (ins) out.push('<p>' + esc(ins.text) + '</p>');
+      return out.join('');
+    }
+    if (k === 'recovery') {
+      const sc = c.sc;
+      if (sc.recovery == null) return '<p>No recovery score yet today' + (sc.calibrating != null ? ' (calibrating: ' + sc.calibrating + ' of 7 days of HRV)' : '') + '. It needs this morning’s HRV from your watch.</p>';
+      const band = sc.recovery >= 67 ? 'green, ready to push' : sc.recovery >= 34 ? 'amber, train but controlled' : 'red, take it easy';
+      out.push('<p>Recovery ' + b1(sc.recovery + '%') + ': ' + band + '.</p>');
+      const bits = []; if (sc.hrv != null) bits.push('HRV ' + Math.round(sc.hrv) + (sc.hrvNorm ? ' vs your normal ' + sc.hrvNorm : '')); if (sc.rhr != null) bits.push('resting HR ' + Math.round(sc.rhr) + (sc.rhrNorm ? ' vs ' + sc.rhrNorm : '')); if (sc.sleep != null) bits.push(sc.sleep.toFixed(1) + ' h sleep');
+      if (bits.length) out.push('<p>' + esc(bits.join(', ')) + '.</p>');
+      const ins = CH ? CH.insights(days(), bodyScores, id => rec(id).mark === 'cheat', id => rec(id).mark === 'done', id => sessOf(rec(id)))[0] : null;
+      if (ins) out.push('<p>Pattern in your data: ' + esc(ins.text) + '</p>');
+      return out.join('');
+    }
+    if (k === 'protein') {
+      const pr = st.prot[tId]; let wk = 0; for (let i = 0; i < 7; i++) { const x = st.prot[idOf(addDays(today, -i))]; if (x && x.taken) wk++; }
+      return '<p>' + (pr && pr.taken ? 'Today ' + b1('is') + ' a protein day: ' + esc(p.shake || 'shake') + ', about ' + kfmt(p.proteinKcal) + ' kcal.' : 'Today is a water day.') + (nextShake ? ' Next shake ' + b1(esc(dayName(parseId(nextShake)))) + '.' : '') + '</p><p>' + wk + ' shake' + (wk === 1 ? '' : 's') + ' in the last 7 days, every ' + p.proteinEvery + ' days. Take one early if your curl or chest press drops more than 10%.</p>';
+    }
+    if (k === 'water') {
+      const w = rec(tId).water || 0, g = p.waterGoal || 3000; const wl = []; for (let i = 1; i <= 7; i++) { const v = rec(idOf(addDays(today, -i))).water; if (v) wl.push(v); }
+      return '<p>Today ' + b1(L(w) + ' of ' + L(g) + ' L') + (w >= g ? ': goal hit.' : ', ' + L(g - w) + ' L to go.') + '</p>' + (wl.length ? '<p>Last 7 days you averaged ' + L(Math.round(wl.reduce((a, b) => a + b, 0) / wl.length / 50) * 50) + ' L on the ' + wl.length + ' day' + (wl.length === 1 ? '' : 's') + ' you logged.</p>' : '<p>Log water with the +250 / +500 buttons on Home.</p>') + '<p>Water with a pinch of salt or electrolytes keeps energy up on a cut.</p>';
+    }
+    if (k === 'food') {
+      const ms = rec(tId).meals || []; let cheats = 0; for (let d = parseId(p.start); d <= today; d = addDays(d, 1)) if (rec(idOf(d)).mark === 'cheat') cheats++;
+      const en = energy(tId, Object.assign({}, rec(tId), { mark: rec(tId).mark || 'done' }), st.prot);
+      out.push('<p>' + (ms.length ? 'Today: ' + esc(ms.map(m => m.n + ' ' + kfmt(m.k)).join(', ')) + ' kcal.' : 'No meals logged today.') + (en ? ' Eaten so far about ' + b1(kfmt(en.food) + ' kcal') + ', deficit ' + b1(kfmt(en.deficit)) + '.' : '') + '</p>');
+      out.push('<p>' + cheats + ' cheat day' + (cheats === 1 ? '' : 's') + ' since ' + fmt(parseId(p.start)) + '. A cheat day costs about ' + (p.baseBurn / p.kcalPerKg).toFixed(2) + ' kg of progress against a water day.</p>');
+      const ins = CH ? CH.insights(days(), bodyScores, id => rec(id).mark === 'cheat', id => rec(id).mark === 'done', id => sessOf(rec(id))).find(i => i.label === 'cheat') : null;
+      if (ins) out.push('<p>' + esc(ins.text) + '</p>');
+      return out.join('');
+    }
+    if (k === 'strength') {
+      const by = {}; Object.keys(days()).sort().forEach(d => (days()[d].lifts || []).forEach(Lf => Lf.s.forEach(x => { const v = e1rm(x[0], x[1]); if (!by[Lf.e] || v > by[Lf.e].v) by[Lf.e] = { v, s: x, d }; })));
+      const names = Object.keys(by);
+      if (st.bestCurl) by['Bicep curl'] = by['Bicep curl'] || { v: st.bestCurl, s: [st.bestCurl, 1], d: st.bestCurlD };
+      if (!names.length && !st.bestCurl && !st.bestChest) return '<p>No lifts logged yet. Add them in Log → Workout and I’ll track your bests and warn you if strength drops.</p>';
+      out.push('<p>Your bests: ' + Object.keys(by).slice(0, 6).map(n => esc(n) + ' ' + b1(esc(setTxt(by[n].s)))).join(', ') + '.</p>');
+      const drops = []; if (st.bestCurl && st.lastCurl != null && st.lastCurl < st.bestCurl * 0.9) drops.push('curl'); if (st.bestChest && st.lastChest != null && st.lastChest < st.bestChest * 0.9) drops.push('chest press');
+      out.push('<p>' + (drops.length ? 'Your ' + drops.join(' and ') + ' is down more than 10%: take a protein day.' : 'No strength drop: the cut is taking fat, not muscle.') + '</p>');
+      return out.join('');
+    }
+    if (k === 'streak') {
+      const cur = LEVELS[st.li], nxt = LEVELS[st.li + 1], into = st.run % 10;
+      return '<p>Cut streak ' + b1(st.run) + ' (best ' + st.best + '), testosterone streak ' + b1(st.tee) + '.</p><p>Boss HP ' + (10 - into) + ' / 10: ' + (10 - into) + ' more clean day' + (10 - into === 1 ? '' : 's') + ' to beat it. Level ' + (st.li + 1) + ' ' + esc(cur[1]) + (nxt ? ', ' + kfmt(nxt[0] - st.xp) + ' XP to ' + esc(nxt[1]) : '') + '.</p>';
+    }
+    if (k === 'fat') {
+      const pts = Object.keys(days()).filter(id => H(rec(id), 'body_fat') != null).sort();
+      if (!pts.length) return '<p>No body-fat readings yet. Add Body Fat Percentage to the Shortcut (Settings → Apple Watch) if your smart scale writes it to Apple Health.</p>';
+      const a = H(rec(pts[0]), 'body_fat'), z = H(rec(pts[pts.length - 1]), 'body_fat');
+      return '<p>Body fat ' + b1(z.toFixed(1) + '%') + ' (' + fmt(parseId(pts[pts.length - 1])) + '), ' + (z <= a ? '−' : '+') + Math.abs(z - a).toFixed(1) + ' since ' + fmt(parseId(pts[0])) + '. Goal under ' + (p.bfGoal || 15) + '%.</p>';
+    }
+    if (k === 'week') {
+      let dn = 0, ch = 0, ss = 0, kg = 0; const rc = [];
+      for (let i = 0; i < 7; i++) { const id = idOf(addDays(today, -i)); if (id < p.start) break; const r = rec(id); if (r.mark === 'done') dn++; if (r.mark === 'cheat') ch++; ss += sessOf(r); const en = energy(id, r, st.prot); if (en) kg += en.kg; const x = bodyScores[id]; if (x && x.recovery != null) rc.push(x.recovery); }
+      return '<p>Last 7 days: ' + b1(dn + ' days completed') + (ch ? ', ' + ch + ' cheat' + (ch > 1 ? 's' : '') : '') + ', ' + ss + ' gym sessions, about ' + b1('−' + kg.toFixed(1) + ' kg') + '.' + (rc.length ? ' Recovery averaged ' + Math.round(rc.reduce((a, b) => a + b, 0) / rc.length) + '%.' : '') + '</p><p>Overall ' + b1(c.lost.toFixed(1) + ' kg') + ' down in ' + (diff(parseId(p.start), today) + 1) + ' days. Streak ' + st.run + '.</p>';
+    }
+    return '<p>I answer from your own numbers. Ask me things like:</p><p>“What should I train today?”, “When will I hit ' + p.goal + ' kg?”, “How did I sleep?”, “Why is my recovery low?”, “Next protein day?”, “What if I eat 1,500 kcal tomorrow?”, “How’s my week going?”, “What are my bests?”</p>';
+  }
+  const COACH_SUG = () => { const p = plan(), pr = last && last.prot[idOf(today)]; return ['What should I train today?', 'When will I hit ' + p.goal + ' kg?', 'How did I sleep?', 'How’s my week going?', pr && pr.taken ? 'What’s my shake today?' : 'Next protein day?', 'Why is my recovery where it is?', 'What if I eat 1,500 kcal tomorrow?', 'What are my bests?']; };
+  function coachSay(who, html) { const d = document.createElement('div'); d.className = 'msg ' + who; d.innerHTML = html; $('coachLog').appendChild(d); $('coachLog').scrollTop = $('coachLog').scrollHeight; }
+  function coachAsk(q) { if (!q.trim()) return; coachSay('you', esc(q)); try { coachSay('bot', coachAnswer(q)); } catch (e) { console.error(e); coachSay('bot', '<p>I couldn’t work that one out. Try asking another way.</p>'); } }
+  function coachOpen() {
+    $('coach').hidden = false;
+    if (!$('coachLog').children.length) { const prof = Store.profile || {}; coachSay('bot', '<p>' + (prof.display_name ? 'Hi ' + esc(prof.display_name.split(' ')[0]) + '. ' : '') + 'Ask me anything about your cut. Here’s today:</p>' + coachAnswer('today')); }
+    $('coachSug').innerHTML = COACH_SUG().map(t => '<button type="button">' + esc(t) + '</button>').join('');
+  }
+  $('coachOpen').addEventListener('click', coachOpen); $('homeCoach').addEventListener('click', coachOpen);
+  $('coachClose').addEventListener('click', () => { $('coach').hidden = true; });
+  $('coachSug').addEventListener('click', e => { const b = e.target.closest('button'); if (b) coachAsk(b.textContent); });
+  $('coachForm').addEventListener('submit', e => { e.preventDefault(); const q = $('coachQ').value; $('coachQ').value = ''; coachAsk(q); });
+
+  // ---------- water ----------
+  const L = ml => (ml / 1000).toFixed(ml % 1000 && ml < 10000 ? (ml % 100 ? 2 : 1) : 1).replace(/\.0$/, '');
+  function renderWater(el, id) {
+    const r = rec(id), goal = plan().waterGoal || 3000, w = r.water || 0, pct = Math.min(100, w / goal * 100);
+    const isToday = id === idOf(today);
+    el.innerHTML = '<div class="wtop"><span class="label">Water' + (isToday ? '' : ' · ' + esc(fmt(parseId(id)))) + '</span><span>' + (w >= goal ? 'Goal hit' : L(goal - w) + ' L to go') + '</span></div>' +
+      '<div class="wtop"><b>' + L(w) + ' <small style="font-size:.85rem;color:var(--muted)">/ ' + L(goal) + ' L</small></b></div>' +
+      '<div class="wbar" role="img" aria-label="' + L(w) + ' of ' + L(goal) + ' litres"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="wbtns"><button type="button" data-w="250">+250 ml</button><button type="button" data-w="500">+500 ml</button><button type="button" data-w="750">+750 ml</button>' +
+      (w ? '<button type="button" class="minus" data-w="-250" aria-label="Remove 250 ml">−250</button>' : '') +
+      '<button type="button" class="salt" data-salt="1" aria-pressed="' + !!r.salt + '">+ Salt / electrolytes</button></div>';
+    el.dataset.day = id;
+  }
+  function waterClick(e) {
+    const el = e.currentTarget, id = el.dataset.day, b = e.target.closest('button'); if (!b || !id) return;
+    if (b.dataset.salt) { const on = !rec(id).salt; change(id, r => { r.salt = on; }, on ? 'Electrolytes ticked' : 'Electrolytes unticked'); return; }
+    const ml = +b.dataset.w;
+    change(id, r => { const v = Math.max(0, (r.water || 0) + ml); r.water = v || null; }, ml > 0 ? 'Water +' + ml + ' ml' : 'Water −' + (-ml) + ' ml');
+  }
+  $('homeWater').addEventListener('click', waterClick); $('sheetWater').addEventListener('click', waterClick);
+
   // ---------- meals: photo → on-phone food recognition → kcal ----------
   (function fillFoods() { const dl = $('foodList'); (window.CUT_FOODS || []).forEach(f => { const o = document.createElement('option'); o.value = f[0]; dl.appendChild(o); }); })();
   const foodByName = n => (window.CUT_FOODS || []).find(f => f[0] === String(n || '').trim().toLowerCase());
@@ -859,8 +1101,39 @@
     $('mealBox').hidden = false; $('mealPrev').hidden = !photo; $('mealGuess').innerHTML = ''; $('mealPortion').value = '1'; mealFill('', null, '');
     setTimeout(() => { $('mealBox').scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!photo) $('mealName').focus(); }, 50);
   }
-  $('mealSnap').addEventListener('click', () => $('mealInput').click());
   $('mealType').addEventListener('click', () => mealOpen(false));
+  // barcode: camera → ZXing (on the phone) → Open Food Facts (free) → a meal you can adjust
+  let scanStream = null, scanLoop = null, scanBusy = false;
+  const scanStop = () => { clearTimeout(scanLoop); scanLoop = null; if (scanStream) scanStream.getTracks().forEach(t => t.stop()); scanStream = null; $('scan').hidden = true; };
+  async function scanFound(code) {
+    scanStop(); mealOpen(false); $('mealName').value = ''; $('mealStatus').textContent = '';
+    $('mealServing').textContent = 'Looking up ' + code + '…';
+    try {
+      const B = await import('./food/barcode.js?v=' + SW_V);
+      const p = await B.lookup(code);
+      if (!p) { $('mealServing').textContent = 'Barcode ' + code + ' isn’t in Open Food Facts yet. Type the name and calories from the pack.'; $('mealName').focus(); return; }
+      mealFill(p.name, p.kcal, p.serving);
+      $('mealPortion').value = '1';
+      $('mealServing').textContent = (p.kcal != null ? kfmt(p.kcal) + ' kcal per ' + (p.serving || 'serving') : 'No calories listed: type them from the pack') + (p.per100 != null ? ' · ' + kfmt(p.per100) + ' kcal per 100 g' : '') + '. Portion multiplies it.';
+    } catch (e) { $('mealServing').textContent = navigator.onLine ? 'Couldn’t look that up just now. Type it instead.' : 'You’re offline: type it instead.'; }
+  }
+  $('mealScan').addEventListener('click', async () => {
+    $('scan').hidden = false; $('scanCode').value = ''; $('scanHint').textContent = 'Point at the barcode';
+    let B; try { B = await import('./food/barcode.js?v=' + SW_V); } catch (e) { $('scanHint').textContent = 'Scanner didn’t load. Type the number below.'; return; }
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+      const v = $('scanVideo'); v.srcObject = scanStream; await v.play().catch(() => {});
+    } catch (e) { $('scanHint').textContent = 'No camera here: type the barcode number below.'; return; }
+    const tick = async () => {
+      if (!scanStream) return;
+      const v = $('scanVideo');
+      if (v.videoWidth && !scanBusy) { scanBusy = true; try { const code = await B.read(v); if (code) { try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} scanBusy = false; scanFound(code); return; } } catch (e) {} scanBusy = false; }
+      scanLoop = setTimeout(tick, 250);
+    };
+    tick();
+  });
+  $('scanClose').addEventListener('click', scanStop);
+  $('scanGo').addEventListener('click', () => { const c = $('scanCode').value.replace(/\D/g, ''); if (c.length >= 8) scanFound(c); else $('scanHint').textContent = 'Barcodes are 8 to 14 digits.'; });
   $('mealCancel').addEventListener('click', () => { $('mealBox').hidden = true; mealGuessToken++; });
   $('mealPortion').addEventListener('change', () => { if (mealBase != null) $('mealKcal').value = Math.round(mealBase * +$('mealPortion').value / 10) * 10; });
   $('mealName').addEventListener('input', () => { const f = foodByName($('mealName').value); if (f) mealFill(f[0], f[1], f[2]); else mealBase = null; });
@@ -873,7 +1146,7 @@
     stat('Looking at your plate…');
     try {
       const small = await shrink(f, 640, 0.85);
-      const F = await import('./food/food.js');
+      const F = await import('./food/food.js?v=' + SW_V);
       const first = !(await F.cached());
       if (first) stat('Getting the food recogniser ready (one time, about 64 MB)…');
       const res = await F.guess(small, (frac) => stat('Downloading the food recogniser: ' + Math.round(frac * 100) + '% (one time)'));
@@ -895,7 +1168,7 @@
   $('mealList').addEventListener('click', e => { const b = e.target.closest('[data-meal-del]'); if (!b) return; const i = +b.dataset.mealDel; change(sel, r => { const m = (r.meals || []).slice(); m.splice(i, 1); r.meals = m.length ? m : null; }, 'Meal removed'); });
 
   // ---------- settings ----------
-  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't'], ['sBf', 'bfGoal']];
+  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't'], ['sBf', 'bfGoal'], ['sWater', 'waterGoal']];
   function renderSettings() {
     const p = plan();
     SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k] != null ? p[k] : ''; });
@@ -1216,7 +1489,7 @@
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';
-  let remPrefs = { hour: 20, log: true, protein: true, waist: true, morning: true, history: true, weekly: true, stalled: true, mhour: 8 };
+  let remPrefs = { hour: 20, log: true, protein: true, waist: true, morning: true, history: true, weekly: true, stalled: true, water: true, mhour: 8 };
   try { const j = JSON.parse(localStorage.getItem(REM_KEY) || 'null'); if (j) remPrefs = Object.assign(remPrefs, j); } catch (e) {}
   let remSaveT = null;
   // every change goes straight to this phone's subscription on the server: no Save button to forget
