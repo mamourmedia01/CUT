@@ -215,6 +215,32 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .plot{position:relative;margin-top:10px;touch-action:pan-y}
 .plot .tip{position:absolute;top:0;z-index:2;pointer-events:none;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px;font-size:.8rem;display:grid;line-height:1.3;white-space:nowrap}
 .plot .tip span{color:var(--muted)}
+/* Stats: Trends card */
+.trcard{gap:10px}
+.trcard .trhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.trcard h3.bh{margin:0;font-family:var(--display);font-size:1.25rem;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+.segmini{display:inline-flex;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.segmini button{font:inherit;font-size:.78rem;font-weight:700;min-height:30px;min-width:40px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer}
+.segmini button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.scroller{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px 2px;scroll-snap-type:x proximity}
+.scroller::-webkit-scrollbar{display:none}
+.scroller button{flex:none;scroll-snap-align:start;font:inherit;font-size:.82rem;font-weight:600;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap}
+.scroller button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.trmain{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:6px}
+.trbig{font-family:var(--display);font-weight:800;font-size:2.6rem;line-height:1;font-variant-numeric:tabular-nums}
+.trunit{font-family:var(--body,inherit);font-size:.95rem;font-weight:600;color:var(--muted);margin-left:4px}
+.trdelta{font-size:.8rem;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.trdelta.up{color:var(--done);background:color-mix(in srgb,var(--done) 14%,transparent)}
+.trdelta.down{color:var(--cheat);background:color-mix(in srgb,var(--cheat) 14%,transparent)}
+.trsub{display:block;color:var(--muted);font-size:.8rem;margin-top:-6px}
+.trcard .plot{margin-top:0}
+.trcard .plot svg text{font-size:10px}
+.trstats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.trstats div{padding:10px 0 2px;display:grid;gap:2px;text-align:center}
+.trstats div+div{border-left:1px solid var(--line)}
+.trstats span{font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.trstats b{font-family:var(--display);font-size:1.25rem;font-weight:800;font-variant-numeric:tabular-nums}
+.trstats small{font-size:.72rem;color:var(--muted)}
 .guide-ol{margin:4px 0 10px;padding-left:20px;display:grid;gap:6px;line-height:1.45}
 .bar.imp{margin-top:10px}
 /* ---------- Body tab ---------- */
@@ -390,8 +416,8 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     </div>
 
     <div class="banner" id="safeBanner" hidden>
-      <div><b>Only saved on this phone</b><span id="safeBannerText">Sign in once so a copy is kept in your private database.</span></div>
-      <button class="btn" type="button" id="safeBannerGo">Back up</button>
+      <div><b id="safeBannerTitle">You're signed out</b><span id="safeBannerText">Sign in so your data syncs and stays backed up.</span></div>
+      <button class="btn primary" type="button" id="safeBannerGo">Sign in</button>
     </div>
 
 
@@ -528,13 +554,21 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
   <!-- STATS -->
   <section class="tab" id="tab-stats" aria-label="Stats" hidden>
     <div class="tabhead"><h2>Stats</h2></div>
-    <div class="card chart" id="bodyHist" hidden>
-      <div class="row"><span class="label" id="bhTitle">Body history</span><span class="label" id="bhSum"></span></div>
-      <div class="chips" id="bhMetric" role="group" aria-label="Measure"></div>
-      <div class="chips" id="bhRange" role="group" aria-label="Period">
-        <button type="button" data-r="30" aria-pressed="true">30D</button><button type="button" data-r="90" aria-pressed="false">90D</button><button type="button" data-r="365" aria-pressed="false">1Y</button><button type="button" data-r="0" aria-pressed="false">All</button>
+    <div class="card chart trcard" id="bodyHist" hidden>
+      <div class="trhead">
+        <h3 class="bh">Trends</h3>
+        <div class="segmini" id="bhRange" role="group" aria-label="Period">
+          <button type="button" data-r="30" aria-pressed="true">30D</button><button type="button" data-r="90" aria-pressed="false">90D</button><button type="button" data-r="365" aria-pressed="false">1Y</button><button type="button" data-r="0" aria-pressed="false">All</button>
+        </div>
       </div>
+      <div class="scroller" id="bhMetric" role="group" aria-label="Measure"></div>
+      <div class="trmain">
+        <div class="trbig"><span id="bhBig">–</span><span class="trunit" id="bhUnit"></span></div>
+        <span class="trdelta" id="bhDelta"></span>
+      </div>
+      <small class="trsub" id="bhSum"></small>
       <div class="plot" id="bhChart"></div>
+      <div class="trstats" id="bhStats"></div>
     </div>
     <div class="card chart">
       <div class="row"><span class="label">Weight</span><span class="label" id="chartRange"></span></div>
@@ -644,11 +678,30 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div id="acctOut">
         <p class="note" id="acctNoCfg">Sync isn't connected yet. Everything is saved on this phone and works offline.</p>
         <div id="acctForm" hidden>
-          <div class="btns"><button class="btn primary" type="button" id="pkIn">Sign in with Face ID</button></div>
-          <p class="note" style="margin-top:12px"><b>New to Cut Log?</b> Enter your email and you're in straight away. No password, no waiting for an email.</p>
-          <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email"></div></div>
-          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="aCreate">Create account</button><button class="btn" type="button" id="aLink">Email me a sign-in link</button></div>
-          <small>Already have an account but no Face ID on this phone? Use <b>Email me a sign-in link</b>.</small>
+          <div class="chips" id="acctMode" role="group" aria-label="Sign in or create an account" style="margin:0 0 12px">
+            <button type="button" data-mode="in" aria-pressed="true">Sign in</button><button type="button" data-mode="up" aria-pressed="false">Create account</button>
+          </div>
+          <div id="modeIn">
+            <div class="btns"><button class="btn primary" type="button" id="pkIn">Sign in with Face ID</button></div>
+            <p class="note" style="margin-top:12px">Or sign in with your email:</p>
+            <div class="fields" style="grid-template-columns:1fr">
+              <div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="username" inputmode="email"></div>
+              <div class="field"><label class="label" for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password"></div>
+            </div>
+            <div class="btns" style="margin-top:10px"><button class="btn" type="button" id="aIn">Sign in</button><button class="linkbtn" type="button" id="aCode">Forgot password?</button></div>
+            <div id="codeRow" hidden>
+              <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="aCodeIn">6-digit code from the email</label><input id="aCodeIn" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></div></div>
+              <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="aCodeGo">Sign in with code</button></div>
+            </div>
+          </div>
+          <div id="modeUp" hidden>
+            <p class="note">Enter your email and you're in straight away, no waiting for an email.</p>
+            <div class="fields" style="grid-template-columns:1fr">
+              <div class="field"><label class="label" for="uEmail">Email</label><input id="uEmail" type="email" autocomplete="username" inputmode="email"></div>
+              <div class="field"><label class="label" for="uPass">Password (optional, at least 8 characters)</label><input id="uPass" type="password" autocomplete="new-password"></div>
+            </div>
+            <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="aCreate">Create account</button></div>
+          </div>
           <small id="aMsg"></small>
         </div>
       </div>
@@ -674,6 +727,12 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         </div>
         <p class="note" id="pkOn" hidden>Face ID sign-in is on<span id="pkNames"></span>.</p>
         <p class="note" id="evLine"><span id="evText"></span> <button class="linkbtn" type="button" id="evBtn">Verify my email (optional)</button></p>
+        <details class="guide" id="pwBox">
+          <summary id="pwSummary">Set a password (backup to Face ID)</summary>
+          <p class="note">Lets you sign in with your email and password on any device, even without Face ID.</p>
+          <div class="fields" style="grid-template-columns:1fr"><div class="field"><label class="label" for="pwNew">New password (at least 8 characters)</label><input id="pwNew" type="password" autocomplete="new-password"></div></div>
+          <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="pwSave">Save password</button></div>
+        </details>
         <div class="btns"><button class="btn" type="button" id="aSync">Sync now</button><button class="btn danger" type="button" id="aOut">Sign out</button></div>
         <small id="pkMsg"></small>
       </div>

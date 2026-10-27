@@ -81,15 +81,15 @@
 
   // ---------- history chart (single series, hover/tap crosshair + tooltip) ----------
   const METRICS = {
-    recovery: { name: 'Recovery', unit: '%', color: 'var(--done)', get: (h, s) => s && s.recovery, lo: 0, hi: 100 },
+    recovery: { name: 'Recovery', unit: '%', color: 'var(--done)', get: (h, s) => s && s.recovery, lo: 0, hi: 100, better: 1 },
     strain: { name: 'Strain', unit: '', color: 'var(--blue)', get: (h, s) => s && s.strain, lo: 0, hi: 21, dp: 1 },
-    sleep: { name: 'Sleep', unit: 'h', color: 'var(--sleep)', get: h => h.sleep_h, dp: 1 },
-    hrv: { name: 'HRV', unit: 'ms', color: 'var(--blue)', get: h => h.hrv_ms },
-    rhr: { name: 'Resting HR', unit: 'bpm', color: 'var(--primary)', get: h => h.rhr },
-    steps: { name: 'Steps', unit: '', color: 'var(--primary)', get: h => h.steps, lo: 0 },
-    active: { name: 'Active kcal', unit: 'kcal', color: 'var(--primary)', get: h => h.active_kcal, lo: 0 },
-    weight: { name: 'Weight', unit: 'kg', color: 'var(--primary)', get: h => h.weight_kg, dp: 1 },
-    vo2: { name: 'VO₂ max', unit: '', color: 'var(--primary)', get: h => h.vo2max, dp: 1 }
+    sleep: { name: 'Sleep', unit: 'h', color: 'var(--sleep)', get: h => h.sleep_h, dp: 1, better: 1 },
+    hrv: { name: 'HRV', unit: 'ms', color: 'var(--blue)', get: h => h.hrv_ms, better: 1 },
+    rhr: { name: 'Resting HR', unit: 'bpm', color: 'var(--primary)', get: h => h.rhr, better: -1 },
+    steps: { name: 'Steps', unit: '', color: 'var(--primary)', get: h => h.steps, lo: 0, better: 1 },
+    active: { name: 'Active kcal', unit: 'kcal', color: 'var(--primary)', get: h => h.active_kcal, lo: 0, better: 1 },
+    weight: { name: 'Weight', unit: 'kg', color: 'var(--primary)', get: h => h.weight_kg, dp: 1, better: -1 },
+    vo2: { name: 'VO₂ max', unit: '', color: 'var(--primary)', get: h => h.vo2max, dp: 1, better: 1 }
   };
   const fmtN = (v, dp) => v == null ? '–' : (dp ? v.toFixed(dp) : Math.round(v).toLocaleString('en-GB'));
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -101,19 +101,26 @@
     const pts = Object.keys(days).filter(id => days[id] && days[id].health && (!startN || dayN(id) >= startN) && dayN(id) <= endN).sort()
       .map(id => ({ id, n: dayN(id), v: M.get(days[id].health, scores[id]) })).filter(p => typeof p.v === 'number' && isFinite(p.v));
     if (!pts.length) { el.innerHTML = '<p class="note">No ' + M.name.toLowerCase() + ' data for this period yet.</p>'; return null; }
-    const W2 = 340, H2 = 190, L = 40, R = 10, T = 12, B = 24;
+    const W2 = 340, H2 = 210, L = 36, R = 8, T = 12, B = 24;
     const n0 = startN || pts[0].n, n1 = endN;
     const vs = pts.map(p => p.v); let lo = M.lo != null ? M.lo : Math.min(...vs), hi = M.hi != null ? M.hi : Math.max(...vs);
     if (M.lo == null || M.hi == null) { const pad = (hi - lo) * 0.12 || Math.max(1, Math.abs(hi) * 0.05); if (M.lo == null) lo -= pad; if (M.hi == null) hi += pad; }
     const x = nn => L + (n1 === n0 ? 0.5 : (nn - n0) / (n1 - n0)) * (W2 - L - R), y = v => T + (hi - v) / ((hi - lo) || 1) * (H2 - T - B);
     let g = '';
-    for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; g += '<line x1="' + L + '" x2="' + (W2 - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="var(--line)" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + fmtN(v, (hi - lo) < 10 && M.dp ? 1 : 0) + '</text>'; }
+    for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; g += '<line x1="' + L + '" x2="' + (W2 - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="var(--line)" stroke-width="1" opacity="' + (i === 0 ? 1 : 0.6) + '"/><text x="' + (L - 6) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + fmtN(v, (hi - lo) < 10 && M.dp ? 1 : 0) + '</text>'; }
     const firstId = startN ? idFromN(n0) : pts[0].id;
     g += '<text x="' + L + '" y="' + (H2 - 6) + '" text-anchor="start">' + nice(firstId) + '</text><text x="' + (W2 - R) + '" y="' + (H2 - 6) + '" text-anchor="end">Today</text>';
-    // line breaks across gaps longer than 3 days
+    // soft fill under the line, then the line (breaks across gaps longer than 3 days)
+    const gid = 'g' + metric;
+    g += '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:' + M.color + ';stop-opacity:.22"/><stop offset="1" style="stop-color:' + M.color + ';stop-opacity:0"/></linearGradient></defs>';
+    const segs = []; pts.forEach((p, i) => { if (!i || p.n - pts[i - 1].n > 3) segs.push([]); segs[segs.length - 1].push(p); });
+    segs.forEach(sg => { if (sg.length > 1) g += '<path d="M' + sg.map(p => x(p.n).toFixed(1) + ' ' + y(p.v).toFixed(1)).join(' L') + ' L' + x(sg[sg.length - 1].n).toFixed(1) + ' ' + (H2 - B) + ' L' + x(sg[0].n).toFixed(1) + ' ' + (H2 - B) + ' Z" fill="url(#' + gid + ')"/>'; });
     let d = ''; pts.forEach((p, i) => { d += (i && p.n - pts[i - 1].n <= 3 ? 'L' : 'M') + x(p.n).toFixed(1) + ' ' + y(p.v).toFixed(1); });
     g += '<path d="' + d + '" fill="none" stroke="' + M.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-    if (pts.length <= 45) pts.forEach(p => { g += '<circle cx="' + x(p.n).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="3" fill="' + M.color + '" stroke="var(--surface)" stroke-width="2"/>'; });
+    // dashed average line
+    const avgV = mean(pts.map(p => p.v));
+    g += '<line x1="' + L + '" x2="' + (W2 - R) + '" y1="' + y(avgV).toFixed(1) + '" y2="' + y(avgV).toFixed(1) + '" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>';
+    if (pts.length <= 45) pts.forEach(p => { g += '<circle cx="' + x(p.n).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="2.5" fill="' + M.color + '" stroke="var(--surface)" stroke-width="1.5"/>'; });
     const last = pts[pts.length - 1];
     g += '<circle cx="' + x(last.n).toFixed(1) + '" cy="' + y(last.v).toFixed(1) + '" r="4.5" fill="' + M.color + '" stroke="var(--surface)" stroke-width="2"/>';
     g += '<g class="hov" visibility="hidden"><line class="hl" y1="' + T + '" y2="' + (H2 - B) + '" stroke="var(--muted)" stroke-width="1"/><circle class="hc" r="5" fill="' + M.color + '" stroke="var(--surface)" stroke-width="2"/></g>';
@@ -132,7 +139,15 @@
     };
     const leave = () => { hov.setAttribute('visibility', 'hidden'); tip.hidden = true; };
     svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move); svg.addEventListener('pointerleave', leave);
-    return { n: pts.length, avg, last: last.v, unit: M.unit, dp: M.dp, name: M.name };
+    // the same length of time just before this period, for "vs previous"
+    let prevAvg = null;
+    if (rangeDays) {
+      const pv = Object.keys(days).filter(id => days[id] && days[id].health && dayN(id) >= startN - rangeDays && dayN(id) < startN)
+        .map(id => M.get(days[id].health, scores[id])).filter(v => typeof v === 'number' && isFinite(v));
+      if (pv.length >= Math.min(5, rangeDays / 3)) prevAvg = mean(pv);
+    }
+    let best = pts[0], low = pts[0]; pts.forEach(p => { if (p.v > best.v) best = p; if (p.v < low.v) low = p; });
+    return { n: pts.length, avg, last: last.v, lastId: last.id, best, low, prevAvg, firstId, unit: M.unit, dp: M.dp, name: M.name, better: M.better };
   }
   function idFromN(n) { return new Date(n * 864e5).toISOString().slice(0, 10); }
 

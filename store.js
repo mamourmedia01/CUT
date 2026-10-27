@@ -61,6 +61,8 @@
       state.plan = Object.assign({}, defaultPlan, (await get('meta', 'plan')) || {});
       const ob = await get('meta', 'outbox'); if (ob) { state.outbox = new Set(ob.days || []); state.planDirty = !!ob.plan; }
       state.lastPull = (await get('meta', 'lastPull')) || null;
+      // One full re-download for phones that got stuck on the old 1,000-row download
+      if (!(await get('meta', 'pullV2'))) { state.lastPull = null; await put('meta', 'pullV2', true); }
       state.lastSyncAt = (await get('meta', 'lastSyncAt')) || null;
       state.healthOutbox = new Set((await get('meta', 'healthOutbox')) || []);
       // Ask the browser to never clear this app's storage on its own (granted automatically
@@ -160,25 +162,35 @@
             } catch (e) { console.warn('history upload will retry', e); }
           }
           // pull days
-          let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).limit(1000);
+          // Page through EVERYTHING changed since the last pull, 1,000 rows at a time, ordered by
+          // (updated_at, day) so rows saved at the same instant (a history import) are never skipped.
           // Look back 5 minutes past the last pull: re-reading a row is harmless, missing one isn't.
-          if (state.lastPull) q = q.gt('updated_at', new Date(new Date(state.lastPull).getTime() - 5 * 60000).toISOString());
-          const { data: rows, error: e2 } = await q;
-          if (e2) throw e2;
+          const since = state.lastPull ? new Date(new Date(state.lastPull).getTime() - 5 * 60000).toISOString() : null;
+          const rows = [];
+          for (let from = 0; ; from += 1000) {
+            let q = sb.from('days').select('day,data,health,updated_at').order('updated_at', { ascending: true }).order('day', { ascending: true }).range(from, from + 999);
+            if (since) q = q.gt('updated_at', since);
+            const { data: page, error: e2 } = await q;
+            if (e2) throw e2;
+            rows.push(...(page || []));
+            if (!page || page.length < 1000) break;
+          }
           let changed = false;
-          for (const row of rows || []) {
+          const writes = [];
+          for (const row of rows) {
             const id = row.day;
             const local = state.days[id] || {};
             const base = state.outbox.has(id) ? Object.assign({}, local) : Object.assign({}, row.data || {});
             delete base.health;
             const rec = Object.assign(base, row.health ? { health: row.health } : {});
             if (JSON.stringify(rec) !== JSON.stringify(state.days[id] || {})) {
-              if (Object.keys(rec).length) { state.days[id] = rec; await put('days', id, rec); }
+              if (Object.keys(rec).length) { state.days[id] = rec; writes.push([id, rec]); }
               else if (state.days[id]) { delete state.days[id]; await del('days', id); }
               changed = true;
             }
             if (!state.lastPull || row.updated_at > state.lastPull) state.lastPull = row.updated_at;
           }
+          for (let i = 0; i < writes.length; i += 500) await putMany('days', writes.slice(i, i + 500));
           await put('meta', 'lastPull', state.lastPull);
           // pull settings
           if (!state.planDirty) {
@@ -236,10 +248,10 @@
     },
     // Instant account: no email is sent. A random password is made and thrown away;
     // you sign in with Face ID (or an email link if you ever need one).
-    async createAccount(email) {
+    async createAccount(email, chosen) {
       if (!sb) throw new Error('Not connected yet.');
       const b = crypto.getRandomValues(new Uint8Array(32)); let pw = ''; b.forEach(x => { pw += String.fromCharCode(x); });
-      pw = btoa(pw).replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + 'Aa1!';
+      pw = chosen && chosen.length >= 8 ? chosen : btoa(pw).replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + 'Aa1!';
       const { data, error } = await sb.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) throw error;
       if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { const e = new Error('exists'); e.code = 'user_already_exists'; throw e; }
@@ -250,6 +262,27 @@
     async verifyEmail() {
       if (!sb || !user || !user.email) throw new Error('Not signed in.');
       const { error } = await sb.auth.signInWithOtp({ email: user.email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: false } });
+      if (error) throw error;
+    },
+    async signInPassword(email, password) {
+      if (!sb) throw new Error('Not connected yet.');
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    },
+    // 6-digit code by email, typed into the app (no link, so it works in the Home Screen app)
+    async sendCode(email) {
+      if (!sb) throw new Error('Not connected yet.');
+      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      if (error) throw error;
+    },
+    async verifyCode(email, code) {
+      if (!sb) throw new Error('Not connected yet.');
+      const { error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+      if (error) throw error;
+    },
+    async setPassword(password) {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const { error } = await sb.auth.updateUser({ password });
       if (error) throw error;
     },
     // New or returning user: one-time sign-in link. Automatic (anonymous) account: confirm an email on it.

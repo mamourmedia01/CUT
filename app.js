@@ -353,8 +353,12 @@
       t(h.active_kcal != null ? kfmt(h.active_kcal) : '–', 'active kcal');
   }
   // ---------- Body tab ----------
-  let bdSel = null;
-  function latestHealthDay() { const ids = Object.keys(days()).filter(id => days()[id] && days()[id].health && id <= idOf(today)).sort(); return ids.length ? ids[ids.length - 1] : idOf(today); }
+  let bdSel = null, bdPicked = false;
+  // Body opens on today. Before any watch data arrives today it shows yesterday; never anything older.
+  function defaultBodyDay() {
+    const t = idOf(today), y = idOf(addDays(today, -1)), has = id => days()[id] && days()[id].health;
+    return has(t) || !has(y) ? t : y;
+  }
   function lastImport() { let b = null; for (const r of Object.values(days())) { const t = r && r.health && r.health.imported_at; if (t && (!b || t > b)) b = t; } return b; }
   function morningSync() {
     for (let i = 0; i < 7; i++) { const r = days()[idOf(addDays(today, -i))]; const t = r && r.health && r.health.synced_at; if (t) { const hr = new Date(t).getHours(); if (hr >= 5 && hr < 12) return true; } }
@@ -362,7 +366,7 @@
   }
   function renderBody() {
     if (!window.CutBody || $('tab-body').hidden) return;
-    if (!bdSel || bdSel > idOf(today)) bdSel = latestHealthDay();
+    if (!bdPicked || !bdSel || bdSel > idOf(today)) bdSel = defaultBodyDay();
     CutBody.render({
       days: days(), scores: bodyScores, selected: bdSel, today: idOf(today),
       isCheat: id => (days()[id] || {}).mark === 'cheat', isDone: id => (days()[id] || {}).mark === 'done', sessions: id => sessOf(rec(id)),
@@ -373,10 +377,10 @@
     $('bdLive').hidden = !fresh || bdSel !== idOf(today);
     if (fresh) $('bdLive').innerHTML = esc(Math.round(th.hr_latest)) + ' bpm <span>heart rate, ' + esc(ago(new Date(th.hr_latest_ms).toISOString())) + '</span>';
   }
-  const shiftDay = n => { const d = addDays(parseId(bdSel || idOf(today)), n); if (idOf(d) <= idOf(today)) { bdSel = idOf(d); renderBody(); } };
+  const shiftDay = n => { const d = addDays(parseId(bdSel || idOf(today)), n); if (idOf(d) <= idOf(today)) { bdSel = idOf(d); bdPicked = bdSel !== idOf(today); renderBody(); } };
   $('bdPrev').addEventListener('click', () => shiftDay(-1));
   $('bdNext').addEventListener('click', () => shiftDay(1));
-  $('bdWeek').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b && !b.disabled) { bdSel = b.dataset.day; renderBody(); } });
+  $('bdWeek').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b && !b.disabled) { bdSel = b.dataset.day; bdPicked = bdSel !== idOf(today); renderBody(); } });
   // swipe left/right on the hero to change day
   (() => { let x0 = null; const el = $('bdHero'); el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true }); el.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) shiftDay(dx > 0 ? -1 : 1); }); })();
   document.addEventListener('click', e => {
@@ -405,8 +409,26 @@
     $('bhMetric').innerHTML = avail.map(k => '<button type="button" data-m="' + k + '" aria-pressed="' + (k === bhMetric) + '">' + CH.METRICS[k].name + '</button>').join('');
     $('bhRange').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.r === bhRange)));
     const r = CH.chart($('bhChart'), ds, bodyScores, bhMetric, bhRange, idOf(today));
-    $('bhTitle').textContent = CH.METRICS[bhMetric].name;
-    $('bhSum').textContent = r ? 'avg ' + CH.fmtN(r.avg, r.dp) + (r.unit ? ' ' + r.unit : '') + ' · ' + r.n + ' days' : '';
+    const M = CH.METRICS[bhMetric], u = M.unit ? ' ' + M.unit : '';
+    const short = id => +id.slice(8, 10) + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+id.slice(5, 7) - 1];
+    const period = bhRange === 30 ? '30 days' : bhRange === 90 ? '90 days' : bhRange === 365 ? '12 months' : 'all time';
+    const dl = $('bhDelta');
+    if (!r) { $('bhBig').textContent = '–'; $('bhUnit').textContent = ''; $('bhSum').textContent = M.name + ' · ' + period; dl.hidden = true; $('bhStats').innerHTML = ''; return; }
+    $('bhBig').textContent = CH.fmtN(r.avg, r.dp);
+    $('bhUnit').textContent = M.unit;
+    $('bhSum').textContent = M.name + ' average · ' + (bhRange ? 'last ' + period : 'since ' + short(r.firstId)) + ' · ' + r.n + ' day' + (r.n === 1 ? '' : 's') + ' logged';
+    if (r.prevAvg != null && r.prevAvg !== 0) {
+      const diff = r.avg - r.prevAvg, pct = diff / Math.abs(r.prevAvg) * 100, flat = Math.abs(pct) < 1;
+      const good = M.better ? diff * M.better > 0 : null;
+      dl.hidden = false;
+      dl.className = 'trdelta' + (flat || good == null ? '' : good ? ' up' : ' down');
+      dl.textContent = flat ? '— Steady vs prior' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(Math.abs(pct) < 10 ? 1 : 0) + '% vs prior';
+      dl.title = 'Previous ' + period + ': ' + CH.fmtN(r.prevAvg, r.dp) + u;
+    } else dl.hidden = true;
+    const hiLbl = M.better === -1 ? 'Lowest' : 'Best', hiP = M.better === -1 ? r.low : r.best;
+    const loLbl = M.better === -1 ? 'Highest' : M.better ? 'Lowest' : 'Low', loP = M.better === -1 ? r.best : r.low;
+    const cell = (lbl, v, sub) => '<div><span>' + lbl + '</span><b>' + CH.fmtN(v, r.dp) + '</b><small>' + sub + '</small></div>';
+    $('bhStats').innerHTML = cell('Latest', r.last, r.lastId === idOf(today) ? 'Today' : short(r.lastId)) + cell(M.better ? hiLbl : 'High', hiP.v, short(hiP.id)) + cell(loLbl, loP.v, short(loP.id));
   }
   const saveBh = () => { try { localStorage.setItem('cutlog-bh', JSON.stringify({ m: bhMetric, r: bhRange })); } catch (e) {} };
   $('bhMetric').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; bhMetric = b.dataset.m; saveBh(); renderBodyHist(); });
@@ -535,7 +557,7 @@
     if (scroll !== false) window.scrollTo(0, 0);
     if (t === 'stats') renderPhotos();
     if (t === 'settings') renderSettings();
-    if (t === 'body') renderBody();
+    if (t === 'body') { bdPicked = false; renderBody(); }
   }
   document.querySelector('.nav').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) show(b.dataset.go); });
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
@@ -636,25 +658,53 @@
     try { authMsg('Waiting for Face ID…'); await Store.passkeySignIn(); authMsg(''); showSignIn = false; renderSettings(); toast('Signed in with Face ID'); }
     catch (e) { authMsg(pkError(e)); }
   });
+  // Sign in / Create account switch
+  $('acctMode').addEventListener('click', e => {
+    const b = e.target.closest('[data-mode]'); if (!b) return;
+    const up = b.dataset.mode === 'up';
+    $('modeIn').hidden = up; $('modeUp').hidden = !up; authMsg('');
+    $('acctMode').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  $('aIn').addEventListener('click', async () => {
+    const em = $('aEmail').value.trim(), pw = $('aPass').value;
+    if (!okEmail(em)) { authMsg('Enter your email.'); return; }
+    if (!pw) { authMsg('Enter your password, or tap Email me a code instead.'); return; }
+    try { authMsg('Signing in…'); await Store.signInPassword(em, pw); authMsg(''); $('aPass').value = ''; showSignIn = false; renderSettings(); toast('Signed in'); }
+    catch (e) { authMsg(/invalid/i.test(e.message || '') ? 'Email or password isn’t right. No password yet? Use Sign in with Face ID, then set one in Settings.' : (e.message || 'Couldn’t sign in.')); }
+  });
+  $('aCode').addEventListener('click', async () => {
+    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email first.'); return; }
+    // Supabase's free email sender only sends a sign-in link (no code) and links open in Safari,
+    // so: open it in Safari, set a password there (Settings), then sign in here with it.
+    try { authMsg('Sending…'); await Store.sendCode(em); authMsg('Sent. Open the email and tap Sign in: it opens Cut Log in Safari, signed in. There, go to Settings → Set a password, then come back here and sign in with it. Or just use Sign in with Face ID.'); }
+    catch (e) { authMsg(/rate|too many|security purposes/i.test(e.message || '') ? 'Too many emails just now. Wait a few minutes, or use Sign in with Face ID.' : /not found|signups not allowed/i.test(e.message || '') ? 'No account with that email. Tap Create account above.' : (e.message || 'Couldn’t send the email.')); }
+  });
+  $('aCodeGo').addEventListener('click', async () => {
+    const em = $('aEmail').value.trim(), code = $('aCodeIn').value.replace(/\D/g, '');
+    if (code.length < 6) { authMsg('Type the 6-digit code from the email.'); return; }
+    try { authMsg('Checking…'); await Store.verifyCode(em, code); authMsg(''); $('codeRow').hidden = true; $('aCodeIn').value = ''; showSignIn = false; renderSettings(); toast('Signed in'); }
+    catch (e) { authMsg(/expired|invalid/i.test(e.message || '') ? 'That code didn’t work or has expired. Tap Email me a code instead to get a new one.' : (e.message || 'Couldn’t sign in.')); }
+  });
+  $('pwSave').addEventListener('click', async () => {
+    const pw = $('pwNew').value; if (pw.length < 8) { $('pkMsg').textContent = 'Use at least 8 characters.'; return; }
+    try { await Store.setPassword(pw); $('pwNew').value = ''; $('pwBox').open = false; $('pwSummary').textContent = 'Change password'; $('pkMsg').textContent = ''; toast('Password saved'); }
+    catch (e) { $('pkMsg').textContent = e.message || 'Couldn’t save the password.'; }
+  });
   $('aCreate').addEventListener('click', async () => {
-    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
+    const em = $('uEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
+    const chosenPw = $('uPass').value; if (chosenPw && chosenPw.length < 8) { authMsg('Use a password of at least 8 characters, or leave it empty.'); return; }
     try {
       authMsg('Creating your account…');
-      const r = await Store.createAccount(em);
+      const r = await Store.createAccount(em, chosenPw);
       if (r === 'in') { authMsg(''); showSignIn = false; renderSettings(); toast('Account created. Now turn on Face ID.'); setTimeout(() => { const b = $('pkAdd'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80); }
       else authMsg('Check your email and tap the link to finish.');
     } catch (e) {
-      authMsg(/already|exists|registered/i.test((e.code || '') + (e.message || '')) ? 'You already have an account with that email. Tap Sign in with Face ID, or Email me a sign-in link.' : (e.message || 'Couldn’t create the account. Check you’re online.'));
+      authMsg(/already|exists|registered/i.test((e.code || '') + (e.message || '')) ? 'You already have an account with that email. Tap Sign in above.' : (e.message || 'Couldn’t create the account. Check you’re online.'));
     }
   });
   $('evBtn').addEventListener('click', async () => {
     try { $('pkMsg').textContent = 'Sending…'; await Store.verifyEmail(); $('pkMsg').textContent = 'Sent. Tap the link in the email to verify. If it doesn’t arrive, the free email allowance is used up for the hour: try later.'; }
     catch (e) { $('pkMsg').textContent = /rate|too many/i.test(e.message || '') ? 'The free email allowance is used up for the hour. Try again later. Everything else works without it.' : (e.message || 'Couldn’t send.'); }
-  });
-  $('aLink').addEventListener('click', async () => {
-    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email.'); return; }
-    try { authMsg('Sending…'); await Store.emailLink(em); authMsg('Sent. Open the email on this phone and tap the link: that creates your account (or signs you in). Then tap Turn on Face ID and you won’t need email again.'); }
-    catch (e) { authMsg(/rate|too many/i.test(e.message || '') ? 'Too many emails just now. Wait a few minutes and try again.' : (e.message || 'Couldn’t send. Check you’re online.')); }
   });
   let showSignIn = false, retypeEmail = false;
   $('lHave').addEventListener('click', () => { showSignIn = true; renderSettings(); });
@@ -757,9 +807,13 @@
     const anon = Store.isAnonymous, hasPk = Store.passkeys.length > 0;
     items.push({ k: 'pk', done: hasPk, t: 'Face ID sign-in', s: hasPk ? 'On: restore on any of your Apple devices' : (Store.user && !anon ? 'One tap, then Face ID' : 'Restore everything on a new phone'), btn: 'Turn on' });
     items.push({ k: 'rem', done: remOnCache, t: 'Daily reminder', s: remOnCache ? 'On at ' + pad(remPrefs.hour) + ':00' : 'One tap, then Allow', btn: 'Turn on' });
-    items.push({ k: 'watch', done: !!watchLast(), t: 'Apple Watch', s: watchLast() ? 'Connected' : 'Free Shortcut, about 5 minutes', btn: 'Set up' });
-    const allDone = items.every(i => i.done);
-    $('setup').hidden = allDone || setupHidden;
+    // the watch counts as set up once any watch data or a Health history import has arrived
+    const watchOn = !!(watchLast() || lastImport() || [0, 1, 2, 3, 4, 5, 6].some(i => { const r = days()[idOf(addDays(today, -i))]; return r && r.health; }));
+    items.push({ k: 'watch', done: watchOn, t: 'Apple Watch', s: watchOn ? 'Connected' : 'Free Shortcut, about 5 minutes', btn: 'Set up' });
+    // The card is for the essentials: once you're backed up and your watch is connected, it goes away by itself.
+    // "Hide" is saved with your account, so it stays hidden after reinstalling.
+    const essentialsDone = !!Store.user && watchOn;
+    $('setup').hidden = essentialsDone || setupHidden || !!(plan() && plan().hideSetup);
     $('setupList').innerHTML = items.map(i => '<li class="' + (i.done ? 'done' : '') + '"><div><b>' + esc(i.t) + '</b><span>' + esc(i.s) + '</span></div>' +
       (i.done ? '<span class="tick" aria-label="Done">✓</span>' : i.btn ? '<button class="btn primary" type="button" data-setup="' + i.k + '">' + esc(i.btn) + '</button>' : '') + '</li>').join('');
   }
@@ -777,7 +831,11 @@
     }
     else if (k === 'watch') { show('settings'); setTimeout(() => { $('watchCard').scrollIntoView({ behavior: 'smooth' }); $('wGuide').open = true; }, 50); }
   });
-  $('setupHide').addEventListener('click', () => { setupHidden = true; try { localStorage.setItem('cutlog-setup-hidden', '1'); } catch (e) {} $('setup').hidden = true; });
+  $('setupHide').addEventListener('click', async () => {
+    setupHidden = true; $('setup').hidden = true;
+    try { localStorage.setItem('cutlog-setup-hidden', '1'); } catch (e) {}
+    try { await Store.savePlan(Object.assign({}, plan(), { hideSetup: true })); } catch (e) {}
+  });
 
   // data safety
   function renderSafe() {
@@ -796,7 +854,9 @@
     $('safeStatus').textContent = !u ? 'Phone only' : Store.pending ? 'Uploading' : 'Safe';
     $('safeCheck').hidden = !u;
     // Home banner: data that exists only on this phone
-    $('safeBanner').hidden = !(n > 0 && Store.connected && !u);
+    $('safeBanner').hidden = !(Store.connected && !u);
+    $('safeBannerTitle').textContent = n > 0 ? 'You’re signed out' : 'Sign in or create an account';
+    $('safeBannerText').textContent = n > 0 ? 'Sign in so your data syncs and stays backed up.' : 'Your days, watch data and settings then sync and stay backed up.';
   }
   $('safeCheck').addEventListener('click', async () => {
     $('safeMsg').textContent = 'Checking every day against the cloud copy…';
@@ -808,7 +868,7 @@
       renderSafe();
     } catch (e) { $('safeMsg').textContent = navigator.onLine ? (e.message || 'The check didn’t finish.') : 'You’re offline. Your data is safe on the phone; check again when you’re online.'; }
   });
-  $('safeBannerGo').addEventListener('click', () => show('settings', true));
+  $('safeBannerGo').addEventListener('click', () => { show('settings', true); setTimeout(() => { $('acct').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); });
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';
