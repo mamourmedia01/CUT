@@ -13,7 +13,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const SHAKE = '<svg class="shake" viewBox="0 0 20 26" aria-hidden="true"><path d="M6 0h8v4l2 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7l2-3z"/></svg>';
 
-  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700 };
+  const PLAN_DEFAULT = { start: '2026-10-14', startWeight: 102, goal: 85, markWeeks: 6, proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, shake: '5 scoops in 500 ml water', autoHour: 12 };
   const LEVELS = [[0, 'Rookie'], [400, 'Starter'], [1000, 'Grinder'], [2000, 'Machine'], [3500, 'Warrior'], [5500, 'Beast'], [8000, 'Shredded'], [11000, 'Legend']];
   const BADGES = [
     { m: '1', name: 'First Step', desc: 'First completed day', test: s => s.done >= 1 },
@@ -285,6 +285,7 @@
     $('selSub').innerHTML = sunday ? 'Weekly check-in day <span class="chip">+50 XP</span>' : '';
     $('waistField').classList.toggle('hl', sunday && r.waist == null);
     setSeg($('segMark'), { done: r.mark === 'done', cheat: r.mark === 'cheat', broken: r.broken });
+    $('autoNote').hidden = !(r.auto && r.mark === 'done');
     setSeg($('segGym'), { am: r.am, pm: r.pm });
     const ws = watchSess(r);
     $('watchNote').hidden = !ws && !r.health;
@@ -322,8 +323,77 @@
   function render() {
     last = compute();
     renderHome(last); renderCal(last); renderSheet(last); renderStats(last); renderBadges(last);
-    renderWatchToday(); renderSafe(); renderSetup(); renderBody();
+    renderWatchToday(); renderSafe(); renderSetup(); renderBody(); renderToday(last); renderWeek(last);
   }
+  // ---------- Home: what today needs (mostly nothing: Autopilot has it) ----------
+  const IC = {
+    ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    auto: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/>',
+    cheat: '<path d="M6 6l12 12M18 6L6 18"/>',
+    shake: '<path d="M9 3h6v3l2 3v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9l2-3z"/>',
+    scale: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.5"/>',
+    watch: '<rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 10v2.2l1.4 1"/>',
+    log: '<path d="M7 4h10v16H7z"/><path d="M10 9h4M10 13h4"/>'
+  };
+  const dayName = d => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  let agendaActs = {};
+  function renderToday(st) {
+    const p = plan(), tId = idOf(today), yId = idOf(addDays(today, -1)), r = rec(tId), y = rec(yId);
+    const prof = Store.profile || {}, name = prof.display_name || (prof.username ? '@' + prof.username : '');
+    const h = new Date().getHours();
+    const hi = h < 5 ? 'Late one' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+    $('hello').textContent = hi + (name ? ', ' + name : '');
+    $('todayDate').textContent = dayName(today);
+    const autoOn = p.autopilot !== false && !!Store.user, started = tId >= p.start, items = []; agendaActs = {};
+    const hm = String(p.autoHour != null ? p.autoHour : 12).padStart(2, '0') + ':00';
+    if (started) {
+      if (r.mark === 'done') items.push(['ok', IC.ok, 'Today is locked in', 'Streak ' + st.run + (r.auto ? ' · by Autopilot' : '')]);
+      else if (r.mark === 'cheat') items.push(['warn', IC.cheat, 'Cheat day logged', 'Reset tomorrow. The boss heals, the streak restarts.', 'Undo', () => setMark(tId, null)]);
+      else if (autoOn) items.push(['auto', IC.auto, 'Autopilot has today', 'Completes at ' + hm + ' tomorrow. Only a cheat needs a tap.', 'Cheat day', () => setMark(tId, 'cheat')]);
+      else items.push(['', IC.log, 'Log today', st.run ? 'Make it ' + (st.run + 1) + ' in a row.' : 'Start the run.', 'Complete', () => setMark(tId, 'done')]);
+      if (y.auto && y.mark === 'done' && yId >= p.start) items.push(['', IC.auto, 'Yesterday auto-completed', 'Was it a cheat day?', 'Mark cheat', () => setMark(yId, 'cheat')]);
+    }
+    const pr = st.prot[tId];
+    const next = Object.keys(st.prot).filter(id => id > tId && st.prot[id].taken).sort()[0];
+    if (pr && pr.taken) items.push(['prot', IC.shake, 'Protein day', (p.shake ? p.shake + ' · ' : '') + 'about ' + kfmt(p.proteinKcal) + ' kcal', pr.status === 'scheduled' && r.protein == null ? 'Skip' : null, () => change(tId, x => { x.protein = false; }, 'Shake skipped')]);
+    else if (pr && !pr.taken) items.push(['', IC.shake, 'Shake skipped today', next ? 'Next ' + dayName(parseId(next)) : '', 'Undo', () => change(tId, x => { x.protein = null; }, 'Protein day back on')]);
+    else if (next) items.push(['', IC.shake, 'Water day', 'Next shake ' + dayName(parseId(next))]);
+    if (today.getDay() === 0 && started) {
+      const doneSun = r.waist != null;
+      items.push([doneSun ? 'ok' : 'blue', doneSun ? IC.ok : IC.scale, 'Sunday check-in', doneSun ? 'Waist logged · +50 XP' : 'Weigh in, waist (+50 XP) and this week’s photo', doneSun ? null : 'Open', () => { sel = tId; show('log'); setTimeout(() => { const f = $('fWaist'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } }, 80); }]);
+    }
+    const lw = watchLast();
+    if (lw && Date.now() - Date.parse(lw) > 36 * 3600e3) items.push(['warn', IC.watch, 'Watch sync paused', 'Nothing since ' + ago(lw) + '. Run the Shortcut once.', 'Sync', () => { location.href = 'shortcuts://run-shortcut?name=Cut%20Log%20Sync'; }]);
+    $('agenda').innerHTML = items.map(([c, ic, t, sub, btn], i) => { if (btn) agendaActs[i] = items[i][5];
+      return '<li><span class="ic ' + c + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ic + '</svg></span><div><b>' + esc(t) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>' + (btn ? '<button class="btn" type="button" data-ag="' + i + '">' + esc(btn) + '</button>' : '') + '</li>'; }).join('');
+    $('todayCard').hidden = !items.length && !name;
+  }
+  $('agenda').addEventListener('click', e => { const b = e.target.closest('[data-ag]'); if (b && agendaActs[b.dataset.ag]) agendaActs[b.dataset.ag](); });
+
+  // ---------- Home: last 7 days (the same numbers as the Sunday brief) ----------
+  function renderWeek(st) {
+    const ids = [], prev = []; for (let i = 6; i >= 0; i--) ids.push(idOf(addDays(today, -i))); for (let i = 13; i >= 7; i--) prev.push(idOf(addDays(today, -i)));
+    const p = plan(), inCut = ids.filter(id => id >= p.start);
+    if (!inCut.length) { $('weekCard').hidden = true; return; }
+    let done = 0, cheats = 0, sess = 0, kg = 0, shakes = 0, act = 0;
+    inCut.forEach(id => { const r = rec(id); if (r.mark === 'done') done++; if (r.mark === 'cheat') cheats++; sess += sessOf(r); if (st.prot[id] && st.prot[id].taken) shakes++; const en = energy(id, r, st.prot); if (en) kg += en.kg; const a = H(r, 'active_kcal'); if (a != null) act += a; });
+    const avg = (list, f) => { const v = list.map(id => bodyScores[id] && bodyScores[id][f]).filter(x => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const rc = avg(ids, 'recovery'), rcP = avg(prev, 'recovery'), sl = avg(ids, 'sleep'), slP = avg(prev, 'sleep'), hv = avg(ids, 'hrv'), hvP = avg(prev, 'hrv');
+    const delta = (a, b, dp, unit) => a == null || b == null ? '' : '<i class="' + (a - b >= 0 ? 'up' : 'down') + '">' + (a - b >= 0 ? '▲ ' : '▼ ') + Math.abs(a - b).toFixed(dp) + (unit || '') + '</i>';
+    const tile = (v, lbl, extra) => '<div><b>' + v + '</b><span>' + lbl + '</span>' + (extra || '') + '</div>';
+    $('wkGrid').innerHTML =
+      tile(done + '<small style="font-size:.8rem;color:var(--muted)">/' + inCut.length + '</small>', 'days completed', cheats ? '<i class="down">' + cheats + ' cheat' + (cheats > 1 ? 's' : '') + '</i>' : '') +
+      tile(sess, 'gym sessions', act ? '<i>' + kfmt(act) + ' kcal</i>' : '') +
+      tile((kg >= 0 ? '−' : '+') + Math.abs(kg).toFixed(1), 'kg (estimate)') +
+      tile(rc != null ? Math.round(rc) + '%' : '–', 'recovery', delta(rc, rcP, 0)) +
+      tile(sl != null ? sl.toFixed(1) : '–', 'h sleep', delta(sl, slP, 1, ' h')) +
+      tile(hv != null ? Math.round(hv) : '–', 'ms HRV', delta(hv, hvP, 0));
+    const next = Object.keys(st.prot).filter(id => id > idOf(today) && st.prot[id].taken).sort()[0];
+    $('wkLine').textContent = shakes + ' protein shake' + (shakes === 1 ? '' : 's') + ' this week' + (next ? ' · next ' + dayName(parseId(next)) : '') + '. Arrows compare with the week before.';
+    $('wkRange').textContent = fmt(parseId(inCut[0])) + ' – ' + fmt(today);
+    $('weekCard').hidden = false;
+  }
+
   // ---------- Body today (Whoop-style) + history ----------
   let bodyScores = {};
   function renderWatchToday() {
@@ -490,7 +560,7 @@
   }
 
   const markMsg = m => m === 'done' ? 'Day completed' : m === 'cheat' ? 'Cheat day logged' : 'Day cleared';
-  function setMark(id, m) { sel = id; change(id, r => { r.mark = m; }, markMsg(m)); }
+  function setMark(id, m) { sel = id; change(id, r => { r.mark = m; delete r.auto; }, markMsg(m)); }
   function hold(id) {
     sel = id; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
     const nb = !rec(id).broken; change(id, r => { r.broken = nb; }, nb ? 'Testosterone streak reset' : 'Break removed');
@@ -604,10 +674,11 @@
   }
 
   // ---------- settings ----------
-  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks']];
+  const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't']];
   function renderSettings() {
     const p = plan();
-    SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k]; });
+    SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k] != null ? p[k] : ''; });
+    renderAuto(); renderProfile();
     const cfg = !!Store.connected, u = Store.user, anon = Store.isAnonymous;
     $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon || showSignIn;
     if (u && !anon) {
@@ -631,10 +702,46 @@
     for (const [i, k, t] of SET) {
       const v = $(i).value;
       if (t === 'd') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) p[k] = v; }
+      else if (t === 't') { p[k] = v.trim().slice(0, 60); }
       else { const n = num(v); if (n != null && n > 0) p[k] = n; }
     }
     p.proteinEvery = Math.max(1, Math.round(p.proteinEvery)); p.markWeeks = Math.max(1, Math.round(p.markWeeks));
     await Store.savePlan(p); render(); toast('Plan saved');
+  });
+
+  // Autopilot
+  (function fillAutoHours() { const sel = $('autoHour'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = pad(h) + ':00'; sel.appendChild(o); } })();
+  function renderAuto() {
+    const p = plan(), on = p.autopilot !== false;
+    $('autoOn').setAttribute('aria-pressed', String(on)); $('autoOn').querySelector('span').textContent = on ? 'On' : 'Off';
+    $('autoHour').value = String(p.autoHour != null ? p.autoHour : 12); $('autoHour').disabled = !on;
+    $('autoStatus').textContent = !Store.user ? 'Needs sign-in' : on ? 'On' : 'Off';
+    $('autoMsg').textContent = !Store.user ? 'Autopilot runs in your private database, so sign in first.' : on ? 'Runs in your private database every 15 minutes, even with the app closed.' + (p.autopilotFrom ? ' Active since ' + fmt(parseId(p.autopilotFrom)) + '.' : ' Starts within 15 minutes.') : 'Off: days stay blank until you mark them.';
+  }
+  $('autoOn').addEventListener('click', async () => { const on = plan().autopilot === false; await Store.savePlan(Object.assign({}, plan(), { autopilot: on })); renderAuto(); render(); toast(on ? 'Autopilot on' : 'Autopilot off'); });
+  $('autoHour').addEventListener('change', async () => { await Store.savePlan(Object.assign({}, plan(), { autoHour: Number($('autoHour').value) })); renderAuto(); render(); toast('Days now complete at ' + pad(Number($('autoHour').value)) + ':00'); });
+
+  // Profile: name + username
+  const prMsg = t => { $('prHint').textContent = t; };
+  function renderProfile() {
+    const pr = Store.profile || {};
+    if (document.activeElement !== $('prName')) $('prName').value = pr.display_name || '';
+    if (document.activeElement !== $('prUser')) $('prUser').value = pr.username || '';
+    if (!$('prHint').dataset.busy) prMsg(pr.username ? 'Sign in anywhere with @' + pr.username + ' and your password' + (Store.passkeys.length ? ', or Face ID.' : '.') : 'Pick a username to sign in with it and your password on any device.');
+  }
+  let prT = null;
+  $('prUser').addEventListener('input', () => {
+    const v = $('prUser').value.trim().toLowerCase().replace(/^@/, ''); $('prUser').value = v.replace(/[^a-z0-9_.]/g, '');
+    clearTimeout(prT); $('prHint').dataset.busy = '1';
+    if (!v) { prMsg('No username: sign in with your email.'); return; }
+    if (!/^[a-z0-9_.]{3,20}$/.test(v)) { prMsg('3 to 20 characters: letters, numbers, _ and .'); return; }
+    prT = setTimeout(async () => { try { prMsg((await Store.usernameFree(v)) ? '@' + v + ' is free.' : '@' + v + ' is taken.'); } catch (e) {} }, 350);
+  });
+  $('prSave').addEventListener('click', async () => {
+    const u = $('prUser').value.trim().toLowerCase(), n = $('prName').value.trim();
+    if (u && !/^[a-z0-9_.]{3,20}$/.test(u)) { prMsg('Usernames are 3 to 20 characters: letters, numbers, _ and .'); return; }
+    try { await Store.setProfile(u, n); delete $('prHint').dataset.busy; renderProfile(); render(); toast('Profile saved'); if (u) prMsg('Saved. Sign in anywhere with @' + u + ' and your password (set one below if you haven’t yet).'); }
+    catch (e) { prMsg(e.message); }
   });
 
   function renderSync() {
@@ -666,14 +773,18 @@
     $('acctMode').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   });
   $('aIn').addEventListener('click', async () => {
-    const em = $('aEmail').value.trim(), pw = $('aPass').value;
-    if (!okEmail(em)) { authMsg('Enter your email.'); return; }
-    if (!pw) { authMsg('Enter your password, or tap Email me a code instead.'); return; }
-    try { authMsg('Signing in…'); await Store.signInPassword(em, pw); authMsg(''); $('aPass').value = ''; showSignIn = false; renderSettings(); toast('Signed in'); }
-    catch (e) { authMsg(/invalid/i.test(e.message || '') ? 'Email or password isn’t right. No password yet? Use Sign in with Face ID, then set one in Settings.' : (e.message || 'Couldn’t sign in.')); }
+    const em = $('aEmail').value.trim(), pw = $('aPass').value, isUser = /^@?[a-zA-Z0-9_.]{3,20}$/.test(em);
+    if (!okEmail(em) && !isUser) { authMsg('Enter your email or username.'); return; }
+    if (!pw) { authMsg('Enter your password, or use Sign in with Face ID.'); return; }
+    try {
+      authMsg('Signing in…');
+      if (isUser) await Store.signInUsername(em.replace(/^@/, '').toLowerCase(), pw); else await Store.signInPassword(em, pw);
+      authMsg(''); $('aPass').value = ''; showSignIn = false; renderSettings(); toast('Signed in');
+    }
+    catch (e) { authMsg(/invalid|match/i.test(e.message || '') ? (isUser ? 'That username and password don’t match.' : 'Email or password isn’t right.') + ' No password yet? Use Sign in with Face ID, then set one in Settings.' : (e.message || 'Couldn’t sign in.')); }
   });
   $('aCode').addEventListener('click', async () => {
-    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email first.'); return; }
+    const em = $('aEmail').value.trim(); if (!okEmail(em)) { authMsg('Enter your email first (not your username) and we’ll send a link.'); return; }
     // Supabase's free email sender only sends a sign-in link (no code) and links open in Safari,
     // so: open it in Safari, set a password there (Settings), then sign in here with it.
     try { authMsg('Sending…'); await Store.sendCode(em); authMsg('Sent. Open the email and tap Sign in: it opens Cut Log in Safari, signed in. There, go to Settings → Set a password, then come back here and sign in with it. Or just use Sign in with Face ID.'); }
@@ -806,7 +917,7 @@
     items.push({ k: 'backup', done: !!Store.user, t: 'Back up', s: Store.user ? 'Backed up automatically' : 'Keep a copy safe in your private database', btn: 'Back up' });
     const anon = Store.isAnonymous, hasPk = Store.passkeys.length > 0;
     items.push({ k: 'pk', done: hasPk, t: 'Face ID sign-in', s: hasPk ? 'On: restore on any of your Apple devices' : (Store.user && !anon ? 'One tap, then Face ID' : 'Restore everything on a new phone'), btn: 'Turn on' });
-    items.push({ k: 'rem', done: remOnCache, t: 'Daily reminder', s: remOnCache ? 'On at ' + pad(remPrefs.hour) + ':00' : 'One tap, then Allow', btn: 'Turn on' });
+    items.push({ k: 'rem', done: remOnCache, t: 'Reminders', s: remOnCache ? 'On: protein days, Sundays, recaps' : 'One tap, then Allow', btn: 'Turn on' });
     // the watch counts as set up once any watch data or a Health history import has arrived
     const watchOn = !!(watchLast() || lastImport() || [0, 1, 2, 3, 4, 5, 6].some(i => { const r = days()[idOf(addDays(today, -i))]; return r && r.health; }));
     items.push({ k: 'watch', done: watchOn, t: 'Apple Watch', s: watchOn ? 'Connected' : 'Free Shortcut, about 5 minutes', btn: 'Set up' });
@@ -872,9 +983,14 @@
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';
-  let remPrefs = { hour: 20, log: true, protein: true, waist: true, morning: true, history: true, mhour: 8 };
+  let remPrefs = { hour: 20, log: true, protein: true, waist: true, morning: true, history: true, weekly: true, stalled: true, mhour: 8 };
   try { const j = JSON.parse(localStorage.getItem(REM_KEY) || 'null'); if (j) remPrefs = Object.assign(remPrefs, j); } catch (e) {}
-  const saveRemLocal = () => { try { localStorage.setItem(REM_KEY, JSON.stringify(remPrefs)); } catch (e) {} };
+  let remSaveT = null;
+  // every change goes straight to this phone's subscription on the server: no Save button to forget
+  const saveRemLocal = () => {
+    try { localStorage.setItem(REM_KEY, JSON.stringify(remPrefs)); } catch (e) {}
+    clearTimeout(remSaveT); remSaveT = setTimeout(async () => { const sub = await currentSub(); if (sub && Store.user && Notification.permission === 'granted') { try { await Store.savePushSubscription(sub, remPrefs); remMsg('Saved.'); } catch (e) {} } }, 500);
+  };
   const pushOK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
@@ -893,8 +1009,8 @@
     $('remNeeds').hidden = !why; $('remNeedsText').textContent = why; $('remReady').hidden = !!why;
     if (why) { $('remStatus').textContent = 'Off'; return; }
     const sub = await currentSub(), on = !!sub && Notification.permission === 'granted';
-    $('remStatus').textContent = on ? 'On at ' + pad(remPrefs.hour) + ':00' : Notification.permission === 'denied' ? 'Blocked' : 'Off';
-    $('remOn').textContent = on ? 'Save reminder settings' : 'Turn on reminders';
+    $('remStatus').textContent = on ? 'On' : Notification.permission === 'denied' ? 'Blocked' : 'Off';
+    $('remOn').hidden = on; $('remOn').textContent = 'Turn on reminders';
     $('remTest').hidden = !on; $('remOff').hidden = !on;
     if (Notification.permission === 'denied') remMsg('Notifications are blocked for this app. Allow them in your phone’s Settings, then come back.');
   }
@@ -911,7 +1027,7 @@
       let sub = await reg.pushManager.getSubscription();
       if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(await Store.vapidPublic()) });
       await Store.savePushSubscription(sub, remPrefs);
-      remMsg(''); toast('Reminders on at ' + pad(remPrefs.hour) + ':00'); renderRem(); renderSetup();
+      remMsg(''); toast('Reminders on. Autopilot sends them for you.'); renderRem(); renderSetup();
     } catch (e) { console.error(e); remMsg('Couldn’t turn reminders on. Check you’re online, then try again.'); toast('Couldn’t turn reminders on. Try again in Settings.'); }
   }
   $('remTest').addEventListener('click', async () => {
@@ -955,7 +1071,7 @@
 
   // ---------- boot ----------
   setInterval(() => { const n = new Date(); if (idOf(n) !== idOf(today)) { today = n; render(); } }, 60000);
-  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); renderSafe(); renderSetup(); if (!$('tab-settings').hidden) renderSettings(); } });
+  Store.on(kind => { if (kind === 'data') render(); if (kind === 'status' || kind === 'auth') { renderSync(); renderSafe(); renderSetup(); if (last) { renderToday(last); renderAuto(); } if (!$('tab-settings').hidden) renderSettings(); } });
 
   Store.init(PLAN_DEFAULT).then(() => {
     renderMode(); render(); renderSync();

@@ -7,10 +7,11 @@
 //   POST ?action=init           the public push key (the key pair is created on first use and kept
 //                               in a private table, so nothing ever has to be copied or pasted)
 //   POST ?action=test           body {endpoint}: send a test push to that one phone
+//   POST ?action=login          body {username, password}: sign in with a username (returns a session)
 
 const APP_PATH = './#log';
 const CONTACT = 'mailto:mamourmedia01@gmail.com';
-const PLAN_DEFAULT = { start: '2026-10-14', proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600 };
+const PLAN_DEFAULT = { start: '2026-10-14', proteinAnchor: '2026-10-25', proteinEvery: 3, proteinKcal: 600, shake: '5 scoops in 500 ml water', baseBurn: 2400, sessionKcal: 1000, kcalPerKg: 7700, autoHour: 12 };
 
 // ---------- base64url ----------
 export const b64u = (buf) => { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
@@ -70,46 +71,134 @@ export async function pushRequest(sub, msg, keys, ttl = 3 * 3600) {
 // ---------- reminder rules (mirror app.js) ----------
 const toN = id => Date.UTC(+id.slice(0, 4), +id.slice(5, 7) - 1, +id.slice(8, 10)) / 86400000;
 const toId = n => new Date(n * 86400000).toISOString().slice(0, 10);
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const niceId = id => WD[new Date(toN(id) * 864e5).getUTCDay()] + ' ' + (+id.slice(8, 10)) + ' ' + MON[+id.slice(5, 7) - 1];
+const kf = n => Math.round(n).toLocaleString('en-GB');
 export function localNow(tz, at = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', weekday: 'short' }).formatToParts(at).map(p => [p.type, p.value]));
   return { id: parts.year + '-' + parts.month + '-' + parts.day, hour: +parts.hour, sunday: parts.weekday === 'Sun' };
 }
-// Due every N days from the anchor; taking it on another day moves the rhythm; skipping a due day keeps it.
-export function proteinDue(plan, days, todayId) {
-  const a = toN(plan.proteinAnchor), t = toN(todayId);
+// Same schedule as the app: due every N days from the anchor; taking it on another day moves the rhythm,
+// skipping a due day keeps it. Returns { id: true } for every protein day up to `untilId`.
+export function proteinDays(plan, days, untilId) {
+  const a = toN(plan.proteinAnchor), s = toN(plan.start), end = toN(untilId), out = {};
   let last = null;
-  for (let n = a; n <= t; n++) {
-    const o = (days[toId(n)] || {}).protein;
+  for (let n = Math.min(a, s); n <= end; n++) {
+    const id = toId(n), o = (days[id] || {}).protein;
+    if (n < a) { if (o === true) out[id] = true; continue; }
     const due = last === null ? n === a : n - last >= plan.proteinEvery;
-    if (n === t) return o == null ? due : false;
-    if (o === true || due) last = n;
+    if (o === true) { out[id] = true; last = n; }
+    else if (o === false) { if (due) last = n; }
+    else if (due) { out[id] = true; last = n; }
   }
-  return false;
+  return out;
 }
+// kept for older callers/tests: is today a protein day that hasn't been answered yet?
+export function proteinDue(plan, days, todayId) { return !!proteinDays(plan, days, todayId)[todayId] && (days[todayId] || {}).protein == null; }
 export function streak(plan, days, todayId) {
   let run = 0;
   for (let n = toN(todayId) - 1; n >= toN(plan.start); n--) { if ((days[toId(n)] || {}).mark === 'done') run++; else break; }
   return run;
 }
-export function compose(planIn, days, prefs, now, lastImport) {
-  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), p = prefs || {}, today = days[now.id] || {};
-  const lines = []; let title = 'Cut Log';
-  const prot = p.protein !== false && proteinDue(plan, days, now.id);
-  const needLog = p.log !== false && !today.mark;
-  const waist = p.waist !== false && now.sunday && today.waist == null;
-  if (prot) { title = 'Protein day'; lines.push('Shake today, about ' + Math.round(plan.proteinKcal) + ' kcal.'); }
-  if (needLog) {
-    const run = streak(plan, days, now.id), toBoss = 10 - (run % 10);
-    if (!prot) title = run ? run + '-day streak' : 'Log today';
-    lines.push(run ? 'Tap today in to make it ' + (run + 1) + '. ' + (toBoss === 1 ? 'Boss falls today.' : toBoss + ' to the boss.') : 'Tap today in and start the run.');
+const H = (r, k) => r && r.health && typeof r.health[k] === 'number' ? r.health[k] : null;
+function sessOf(r) {
+  const u = (r.am ? 1 : 0) + (r.pm ? 1 : 0); if (u) return u;
+  const w = H(r, 'workouts'); if (w != null) return Math.min(2, Math.round(w));
+  const ex = H(r, 'exercise_min'); return ex == null ? 0 : ex >= 90 ? 2 : ex >= 20 ? 1 : 0;
+}
+// the app's energy model: kg the day takes off the next morning's weight (null = blank day)
+export function dayKg(plan, r, protein) {
+  const sess = sessOf(r);
+  if (!r.mark && !sess && r.food == null && r.gymKcal == null) return null;
+  const gym = r.gymKcal != null ? r.gymKcal : (H(r, 'active_kcal') != null ? H(r, 'active_kcal') : sess * plan.sessionKcal);
+  const rest = H(r, 'resting_kcal') != null ? H(r, 'resting_kcal') : plan.baseBurn;
+  const food = r.food != null ? r.food : (r.mark === 'cheat' ? rest : (protein ? plan.proteinKcal : 0));
+  return (rest + gym - food) / plan.kcalPerKg;
+}
+const merge = (days, health) => { const o = {}; new Set([...Object.keys(days), ...Object.keys(health)]).forEach(id => { o[id] = Object.assign({}, days[id] || {}, health[id] ? { health: health[id] } : {}); }); return o; };
+
+// Morning: recovery (once today's HRV is in), protein day, Sunday check-in.
+export function morningPush(planIn, days, health, prefs, now, opts = {}) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), p = prefs || {}, t = days[now.id] || {};
+  const mh = p.mhour != null ? +p.mhour : 8;
+  const rec = p.morning !== false && health[now.id] && health[now.id].hrv_ms != null ? morningMsg(health, now.id) : null;
+  const prot = p.protein !== false && !!proteinDays(plan, days, now.id)[now.id] && t.protein !== true;
+  const sun = p.waist !== false && now.sunday && t.waist == null;
+  // wait up to two hours for the watch; then send what's due without the recovery line
+  if (!rec && !((prot || sun) && (now.hour >= mh + 2 || opts.force))) return null;
+  const titles = [], lines = [];
+  if (rec) { titles.push(rec.title); lines.push(rec.body); }
+  if (prot) { titles.push('Protein day'); lines.push('Shake today: ' + plan.shake + ', about ' + kf(plan.proteinKcal) + ' kcal.'); }
+  if (sun) { titles.push('Sunday check-in'); lines.push('Weigh in, measure your waist (+50 XP) and take this week’s photo.'); }
+  return { title: titles.join(' · '), body: lines.join(' '), url: rec && !prot && !sun ? './#body' : './#log', tag: 'morning' };
+}
+
+// Evening: what today added up to, and what Autopilot will do with it.
+export function eveningPush(planIn, days, health, prefs, now) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), p = prefs || {};
+  if (p.log === false) return null;
+  const all = merge(days, health), r = all[now.id] || {}, tomorrow = toId(toN(now.id) + 1);
+  const prot = proteinDays(plan, all, tomorrow), dayNo = toN(now.id) - toN(plan.start) + 1;
+  if (dayNo < 1) return null;
+  const bits = [], sess = sessOf(r), act = H(r, 'active_kcal'), steps = H(r, 'steps');
+  if (sess) bits.push(sess === 2 ? 'Double session' : '1 session');
+  if (act != null) bits.push(kf(act) + ' active kcal');
+  if (steps != null) bits.push(kf(steps) + ' steps');
+  const kg = dayKg(plan, Object.assign({}, r, { mark: r.mark || (plan.autopilot !== false ? 'done' : null) }), !!prot[now.id]);
+  const lines = [];
+  if (bits.length) lines.push(bits.join(' · ') + '.');
+  if (kg != null && r.mark !== 'cheat') lines.push('About ' + (kg >= 0 ? '−' : '+') + Math.abs(kg).toFixed(2) + ' kg by the morning.');
+  const run = streak(plan, all, now.id);
+  let title = 'Day ' + dayNo + ' recap';
+  if (r.mark === 'cheat') { title = 'Cheat day logged'; lines.push('Reset tomorrow: the boss heals, the streak starts again.'); }
+  else if (r.mark === 'done') { const toBoss = 10 - ((run + 1) % 10 || 10); lines.push('Locked in. Streak ' + (run + 1) + (toBoss ? ', ' + toBoss + ' to the boss.' : ', boss down.')); }
+  else if (plan.autopilot !== false) lines.push('Autopilot completes today at ' + String(plan.autoHour).padStart(2, '0') + ':00 tomorrow. Cheated? Tap to mark it.');
+  else lines.push(run ? 'Tap today in to make it ' + (run + 1) + '.' : 'Tap today in and start the run.');
+  if (p.protein !== false && prot[tomorrow] && (all[tomorrow] || {}).protein == null) lines.push('Tomorrow is a protein day.');
+  return { title, body: lines.join(' '), url: './#log', tag: 'evening' };
+}
+
+// Sunday evening: the week in one push (the same numbers as the brief on Home).
+export function weeklyBrief(planIn, days, health, now, lastImport) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {}), all = merge(days, health);
+  const ids = []; for (let i = 6; i >= 0; i--) ids.push(toId(toN(now.id) - i));
+  const prev = []; for (let i = 13; i >= 7; i--) prev.push(toId(toN(now.id) - i));
+  const prot = proteinDays(plan, all, toId(toN(now.id) + 14));
+  let done = 0, cheats = 0, sess = 0, kg = 0, shakes = 0;
+  ids.forEach(id => { const r = all[id] || {}; if (r.mark === 'done') done++; if (r.mark === 'cheat') cheats++; sess += sessOf(r); if (prot[id]) shakes++; const k = dayKg(plan, r, !!prot[id]); if (k != null) kg += k; });
+  const sc = compute(all), avg = (list, f) => { const v = list.map(id => sc[id] && sc[id][f]).filter(x => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const rec = avg(ids, 'recovery'), recP = avg(prev, 'recovery'), sl = avg(ids, 'sleep'), hrv = avg(ids, 'hrv');
+  const next = Object.keys(prot).filter(id => id > now.id).sort()[0];
+  const lines = [done + '/7 days completed' + (cheats ? ', ' + cheats + ' cheat' + (cheats > 1 ? 's' : '') : '') + ' · ' + sess + ' session' + (sess === 1 ? '' : 's') + ' · about −' + Math.max(0, kg).toFixed(1) + ' kg.'];
+  const h = [];
+  if (rec != null) h.push('Recovery ' + Math.round(rec) + '%' + (recP != null ? ' (' + (rec - recP >= 0 ? '▲' : '▼') + Math.abs(Math.round(rec - recP)) + ')' : ''));
+  if (sl != null) h.push('sleep ' + sl.toFixed(1) + ' h');
+  if (hrv != null) h.push('HRV ' + Math.round(hrv));
+  if (h.length) lines.push(h.join(', ') + '.');
+  if (next) lines.push('Next shake ' + niceId(next) + '.');
+  if (!lastImport || Date.now() - Date.parse(lastImport) > 8 * 864e5) lines.push('Tip: refresh your Health history for sleep stages.');
+  return { title: 'Your week in review', body: lines.join(' '), url: './#home', tag: 'weekly', stats: { done, cheats, sess, kg, shakes, rec, recP, sl, hrv, next } };
+}
+
+// The Watch has gone quiet: the Shortcut automation probably stopped (iOS sometimes asks again after updates).
+export function stalledPush(lastSync, nowMs = Date.now()) {
+  if (!lastSync || nowMs - Date.parse(lastSync) < 36 * 3600e3) return null;
+  const d = new Date(lastSync), id = d.toISOString().slice(0, 10);
+  return { title: 'Watch sync paused', body: 'No Apple Watch data since ' + niceId(id) + '. Open Shortcuts and run your Cut Log sync once, and check its automation is set to Run Immediately.', url: './#settings', tag: 'stalled' };
+}
+
+// Autopilot: a past day you didn't mark counts as completed once the grace hour passes (cheat days you mark yourself).
+// Only days from the day Autopilot was switched on; never days before the cut started; at most 3 days back.
+export function autopilotDays(planIn, days, now) {
+  const plan = Object.assign({}, PLAN_DEFAULT, planIn || {});
+  if (plan.autopilot === false || !plan.autopilotFrom) return [];
+  const from = Math.max(toN(plan.autopilotFrom), toN(plan.start), toN(now.id) - 3), t = toN(now.id), out = [];
+  for (let n = from; n < t; n++) {
+    if (n === t - 1 && now.hour < plan.autoHour) continue;
+    const id = toId(n), r = days[id] || {};
+    if (!r.mark) out.push(id);
   }
-  if (waist) { if (!prot && !needLog) title = 'Sunday check'; lines.push('Measure your waist for +50 XP.'); }
-  // Sundays: nudge to refresh the Apple Health history if it's over a week old (sleep stages + heart-rate strain)
-  if (p.history !== false && now.sunday && (!lastImport || Date.now() - Date.parse(lastImport) > 8 * 864e5)) {
-    if (!lines.length) title = 'Weekly refresh';
-    lines.push('Refresh your Apple Health history for sleep stages and heart-rate strain: Health app, Export, then Cut Log Settings.');
-  }
-  return lines.length ? { title, body: lines.join(' '), url: APP_PATH } : null;
+  return out;
 }
 
 // ---------- recovery (same maths as health.js in the app; keep the two in step) ----------
@@ -220,39 +309,87 @@ async function send(db, keys, sub, msg) {
   return 'sent';
 }
 
-async function run(db, keys) {
-  const subs = await db('push_subs?select=endpoint,user_id,sub,prefs,tz,last_sent,last_morning');
-  if (!subs.length) return { phones: 0, sent: 0 };
+async function run(db, keys, opts = {}) {
   const since = toId(Math.floor(Date.now() / 86400000) - 120);
-  const [settings, dayRows] = await Promise.all([db('settings?select=user_id,data'), db('days?select=user_id,day,data,health&day=gte.' + since)]);
-  const plans = {}, days = {}, health = {}, lastImport = {};
-  settings.forEach(s => { plans[s.user_id] = s.data; });
+  const [subs, settings, dayRows, tokens] = await Promise.all([
+    db('push_subs?select=endpoint,user_id,sub,prefs,tz,sent'),
+    db('settings?select=user_id,data'),
+    db('days?select=user_id,day,data,health&day=gte.' + since),
+    db('health_tokens?select=user_id')
+  ]);
+  const plans = {}, days = {}, health = {}, lastImport = {}, lastSync = {}, tzOf = {};
+  settings.forEach(s => { plans[s.user_id] = s.data || {}; });
+  subs.forEach(s => { if (!tzOf[s.user_id]) tzOf[s.user_id] = s.tz; });
   dayRows.forEach(d => {
     (days[d.user_id] = days[d.user_id] || {})[d.day] = d.data || {};
-    if (d.health) { (health[d.user_id] = health[d.user_id] || {})[d.day] = d.health; const t = d.health.imported_at; if (t && (!lastImport[d.user_id] || t > lastImport[d.user_id])) lastImport[d.user_id] = t; }
+    if (d.health) {
+      (health[d.user_id] = health[d.user_id] || {})[d.day] = d.health;
+      const t = d.health.imported_at; if (t && (!lastImport[d.user_id] || t > lastImport[d.user_id])) lastImport[d.user_id] = t;
+      const w = d.health.synced_at; if (w && (!lastSync[d.user_id] || w > lastSync[d.user_id])) lastSync[d.user_id] = w;
+    }
   });
   const out = [];
-  for (const s of subs) {
-    const now = localNow(s.tz || 'Europe/London'), p = s.prefs || {};
-    // morning recovery briefing: once a day, as soon as today's HRV has arrived (window: chosen hour + 3)
-    const mh = p.mhour != null ? +p.mhour : 8;
-    if (p.morning !== false && s.last_morning !== now.id && now.hour >= mh && now.hour <= mh + 3) {
-      const hd = health[s.user_id] || {};
-      const msg = hd[now.id] && hd[now.id].hrv_ms != null ? morningMsg(hd, now.id) : null;
-      if (msg) {
-        const res = await send(db, keys, s, msg);
-        if (res !== 'expired' && !res.startsWith('failed')) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_morning: now.id }) });
-        out.push('morning ' + res);
-      }
+  // 1. Autopilot: complete the days you didn't mark (cheats are the only thing left to log by hand)
+  for (const uid of Object.keys(plans)) {
+    const now = localNow(tzOf[uid] || 'Europe/London', opts.at);
+    // Autopilot is on by default; it starts from the day it first runs, so past days are never rewritten
+    if (plans[uid].autopilot !== false && !plans[uid].autopilotFrom) {
+      plans[uid] = Object.assign({}, plans[uid], { autopilotFrom: now.id });
+      if (!opts.dry) await db('settings?user_id=' + eq(uid), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: plans[uid] }) });
+      out.push('autopilot on from ' + now.id);
     }
-    const hour = p.hour != null ? +p.hour : 20;
-    if (s.last_sent === now.id || now.hour < hour || now.hour > hour + 3) continue; // once a day, in a 4-hour window (GitHub cron can run late)
-    const msg = compose(plans[s.user_id], days[s.user_id] || {}, s.prefs, now, lastImport[s.user_id]);
-    const res = msg ? await send(db, keys, s, msg) : 'nothing due';
-    if (res !== 'expired' && !res.startsWith('failed')) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_sent: now.id }) });
-    out.push(res);
+    const ids = autopilotDays(plans[uid], days[uid] || {}, now);
+    for (const id of ids) {
+      const data = Object.assign({}, (days[uid] || {})[id] || {}, { mark: 'done', auto: true });
+      if (!opts.dry) await db('days?on_conflict=user_id,day', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([{ user_id: uid, day: id, data }]) });
+      (days[uid] = days[uid] || {})[id] = data;
+      out.push('autopilot ' + id);
+    }
+  }
+  // 2. Pushes: each kind at most once a day per phone, inside its window (the clock runs every 15 minutes)
+  const hasToken = new Set(tokens.map(t => t.user_id));
+  for (const s of subs) {
+    const now = localNow(s.tz || 'Europe/London', opts.at), p = s.prefs || {}, sent = Object.assign({}, s.sent || {}), uid = s.user_id;
+    const plan = plans[uid], dd = days[uid] || {}, hh = health[uid] || {};
+    const mh = p.mhour != null ? +p.mhour : 8, eh = p.hour != null ? +p.hour : 20;
+    const inWin = (h, len) => now.hour >= h && now.hour < h + len;
+    const due = [];
+    if (sent.morning !== now.id && inWin(mh, 4)) { const m = morningPush(plan, dd, hh, p, now, { force: now.hour >= mh + 3 }); if (m) due.push(['morning', m]); else if (now.hour >= mh + 3) sent.morning = now.id; }
+    if (sent.evening !== now.id && inWin(eh, 3)) {
+      const m = now.sunday && p.weekly !== false ? weeklyBrief(plan, dd, hh, now, lastImport[uid]) : eveningPush(plan, dd, hh, p, now);
+      if (m) due.push(['evening', m]); else sent.evening = now.id;
+    }
+    if (p.stalled !== false && hasToken.has(uid) && now.hour >= 9 && now.hour < 22 && (!sent.stalled || toN(now.id) - toN(sent.stalled) >= 3)) {
+      const m = stalledPush(lastSync[uid], opts.at ? opts.at.getTime() : Date.now()); if (m) due.push(['stalled', m]);
+    }
+    let gone = false;
+    for (const [kind, m] of due) {
+      let res; try { res = opts.dry ? 'dry' : await send(db, keys, s, { title: m.title, body: m.body, url: m.url, tag: m.tag }); } catch (e) { res = 'failed ' + (e && e.message || e); }
+      out.push(kind + ' ' + res + (opts.dry ? ': ' + m.title + ' | ' + m.body : ''));
+      if (res === 'expired') { gone = true; break; }
+      if (!res.startsWith('failed')) sent[kind] = now.id;
+    }
+    if (!gone && !opts.dry && JSON.stringify(sent) !== JSON.stringify(s.sent || {})) await db('push_subs?endpoint=' + eq(s.endpoint), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sent }) });
   }
   return { phones: subs.length, results: out };
+}
+
+// ---------- sign in with a username ----------
+// The email behind a username never leaves the server: we look it up with the service key and ask
+// Supabase Auth for a session with the password, then hand the client only the session.
+async function login(db, req, env) {
+  const { username, password } = await req.json().catch(() => ({}));
+  const nope = () => json({ error: 'That username and password don’t match.' }, 401);
+  const u = String(username || '').trim().toLowerCase().replace(/^@/, '');
+  if (!/^[a-z0-9_.]{3,20}$/.test(u) || !password) return nope();
+  const email = await db('rpc/email_for_username', { method: 'POST', body: JSON.stringify({ p_username: u }) });
+  if (!email) return nope();
+  const r = await fetch(env.url.replace(/\/$/, '') + '/auth/v1/token?grant_type=password', {
+    method: 'POST', headers: { apikey: env.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) return r.status === 429 ? json({ error: 'Too many tries. Wait a few minutes, then try again.' }, 429) : nope();
+  return json({ access_token: j.access_token, refresh_token: j.refresh_token });
 }
 
 // ---------- Apple Watch (iPhone Shortcut) ----------
@@ -328,6 +465,7 @@ export async function handle(req, env) {
     const q = new URL(req.url).searchParams, action = q.get('action') || 'run';
     if (action === 'health') return await health(db, req, q);
     if (action === 'push') return await pushApp(db, req, q);
+    if (action === 'login') return await login(db, req, env);
     const keys = await getKeys(db);
     if (action === 'init') return json({ publicKey: keys.public_key });
     if (action === 'test') {
@@ -346,6 +484,7 @@ export async function handle(req, env) {
 if (globalThis.Deno && Deno.serve) {
   Deno.serve(req => handle(req, {
     url: Deno.env.get('SUPABASE_URL'),
-    key: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY')
+    key: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY'),
+    anon: Deno.env.get('SUPABASE_ANON_KEY')
   }));
 }

@@ -215,6 +215,38 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .plot{position:relative;margin-top:10px;touch-action:pan-y}
 .plot .tip{position:absolute;top:0;z-index:2;pointer-events:none;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 8px;font-size:.8rem;display:grid;line-height:1.3;white-space:nowrap}
 .plot .tip span{color:var(--muted)}
+/* Home: Today agenda + last 7 days */
+.today{gap:10px}
+.hello{margin:0;font-family:var(--display);font-size:1.45rem;font-weight:800;text-transform:uppercase;letter-spacing:.01em;line-height:1.05}
+.agenda{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.agenda li{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2)}
+.agenda li .ic{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--surface);color:var(--muted)}
+.agenda li .ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.agenda li .ic.ok{background:var(--done);color:var(--on-done,#fff)}
+.agenda li .ic.prot{background:var(--xp);color:var(--xp-ink)}
+.agenda li .ic.warn{background:var(--cheat);color:#fff}
+.agenda li .ic.auto{background:var(--primary);color:var(--on-primary)}
+.agenda li .ic.blue{background:var(--blue);color:#fff}
+.agenda li div{flex:1;display:grid;gap:1px;min-width:0}
+.agenda li b{font-size:.92rem}
+.agenda li span{font-size:.8rem;color:var(--muted)}
+.agenda li .btn{min-height:36px;padding:0 12px;font-size:.82rem;flex:none}
+.wkgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.wkgrid div{background:var(--surface-2);border-radius:var(--r-md);padding:10px;display:grid;gap:2px;min-width:0}
+.wkgrid b{font-family:var(--display);font-size:1.35rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.wkgrid span{font-size:.72rem;color:var(--muted)}
+.wkgrid i{font-style:normal;font-size:.72rem;font-weight:700}
+.wkgrid i.up{color:var(--done)}.wkgrid i.down{color:var(--cheat)}
+/* Settings: profile + toggle */
+.atwrap{display:flex;align-items:center;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2);padding-left:12px}
+.atwrap span{color:var(--muted);font-weight:600}
+.atwrap input{border:0!important;background:transparent!important;padding-left:4px!important;flex:1;min-width:0}
+.toggle{font:inherit;font-weight:700;font-size:.9rem;display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 12px 0 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);cursor:pointer}
+.toggle i{width:42px;height:26px;border-radius:999px;background:var(--line);position:relative;transition:background .15s}
+.toggle i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.toggle[aria-pressed="true"]{color:var(--ink)}
+.toggle[aria-pressed="true"] i{background:var(--done)}
+.toggle[aria-pressed="true"] i::after{transform:translateX(16px)}
 /* Stats: Trends card */
 .trcard{gap:10px}
 .trcard .trhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -421,6 +453,11 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
     </div>
 
 
+    <div class="card today" id="todayCard">
+      <div class="row"><h3 class="hello" id="hello">Today</h3><span class="label" id="todayDate"></span></div>
+      <ul class="agenda" id="agenda"></ul>
+    </div>
+
     <div class="card" style="gap:8px">
       <div class="row"><span class="label" id="goalLabel">102 kg to 85 kg</span><span class="label" id="dates"></span></div>
       <div class="track" aria-hidden="true"><i id="trackFill" style="width:0%"></i></div>
@@ -457,6 +494,12 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <p class="note" id="bodyNote" hidden></p>
       <div class="tiles3 tiles4" id="bodyTiles"></div>
       <div class="btns"><button class="btn primary" type="button" id="openBody">Open Body</button><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
+    </div>
+
+    <div class="card" id="weekCard" hidden>
+      <div class="row"><span class="label">Last 7 days</span><span class="label" id="wkRange"></span></div>
+      <div class="wkgrid" id="wkGrid"></div>
+      <p class="note" id="wkLine"></p>
     </div>
 
     <div class="card">
@@ -524,6 +567,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <button type="button" data-v="cheat" aria-pressed="false">Cheat day</button>
           <button type="button" data-v="broken" aria-pressed="false">Streak broken</button>
         </div>
+        <small id="autoNote" hidden>Completed by Autopilot. If it was a cheat day, tap Cheat day.</small>
       </div>
       <div class="field"><span class="label">Gym · +30 XP each, +50 for a double</span>
         <div class="seg" id="segGym">
@@ -683,9 +727,9 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           </div>
           <div id="modeIn">
             <div class="btns"><button class="btn primary" type="button" id="pkIn">Sign in with Face ID</button></div>
-            <p class="note" style="margin-top:12px">Or sign in with your email:</p>
+            <p class="note" style="margin-top:12px">Or sign in with your email or username:</p>
             <div class="fields" style="grid-template-columns:1fr">
-              <div class="field"><label class="label" for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="username" inputmode="email"></div>
+              <div class="field"><label class="label" for="aEmail">Email or username</label><input id="aEmail" type="text" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false"></div>
               <div class="field"><label class="label" for="aPass">Password</label><input id="aPass" type="password" autocomplete="current-password"></div>
             </div>
             <div class="btns" style="margin-top:10px"><button class="btn" type="button" id="aIn">Sign in</button><button class="linkbtn" type="button" id="aCode">Forgot password?</button></div>
@@ -721,6 +765,12 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
       <div id="acctIn" hidden>
         <p class="note">Signed in as <b id="aWho"></b>. Your days, settings and photos sync to your private database.</p>
+        <div class="fields" id="profBox">
+          <div class="field"><label class="label" for="prName">Your name</label><input id="prName" type="text" autocomplete="nickname" maxlength="40" placeholder="Shown on Home"></div>
+          <div class="field"><label class="label" for="prUser">Username</label><div class="atwrap"><span aria-hidden="true">@</span><input id="prUser" type="text" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="20" placeholder="yourname"></div></div>
+        </div>
+        <small id="prHint">Pick a username to sign in with it and your password on any device.</small>
+        <div class="btns"><button class="btn primary" type="button" id="prSave">Save profile</button></div>
         <div id="pkOffer" hidden>
           <p class="note"><b>Turn on Face ID sign-in.</b> Next time, on any of your Apple devices, you sign in with one glance.</p>
           <div class="btns"><button class="btn primary" type="button" id="pkAdd">Turn on Face ID</button></div>
@@ -758,6 +808,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <div class="field"><label class="label" for="sProtE">Protein every N days</label><input id="sProtE" type="number" min="1" max="14" step="1" inputmode="numeric"></div>
         <div class="field"><label class="label" for="sProtA">Protein schedule from</label><input id="sProtA" type="date"></div>
         <div class="field"><label class="label" for="sWeeks">Milestone at week</label><input id="sWeeks" type="number" min="1" max="52" step="1" inputmode="numeric"></div>
+        <div class="field" style="grid-column:1/-1"><label class="label" for="sShake">Protein shake (shown in reminders)</label><input id="sShake" type="text" maxlength="60"></div>
       </div>
       <div class="btns"><button class="btn primary" type="button" id="sSave">Save plan</button></div>
     </div>
@@ -876,21 +927,32 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <small id="impMsg"></small>
     </div>
 
+    <div class="card" id="autoCard">
+      <div class="row"><span class="label">Autopilot</span><span class="label" id="autoStatus">On</span></div>
+      <p class="note">Cut Log runs the day for you. Your Apple Watch fills in sessions, calories, steps and weigh-ins; protein days follow the schedule; and any day you don’t mark is <b>completed automatically</b> the next day. The only thing left to tap is a cheat day.</p>
+      <div class="fields">
+        <div class="field"><label class="label" for="autoOn">Auto-complete days</label><button class="toggle" type="button" id="autoOn" aria-pressed="true"><i></i><span>On</span></button></div>
+        <div class="field"><label class="label" for="autoHour">Completes the next day at</label><select id="autoHour"></select></div>
+      </div>
+      <small id="autoMsg">Runs in your private database every 15 minutes, even with the app closed.</small>
+    </div>
+
     <div class="card" id="remCard">
       <div class="row"><span class="label">Reminders</span><span class="label" id="remStatus">Off</span></div>
       <p class="note">An evening nudge to tap the day in, protein days and the Sunday waist check, plus a morning recovery score once your watch has synced. Nothing is sent if there's nothing to say.</p>
       <div id="remNeeds"><small id="remNeedsText">Sign in to sync first. Reminders are sent from your private database.</small></div>
       <div id="remReady" hidden>
         <div class="fields" style="grid-template-columns:1fr">
-          <div class="field"><label class="label" for="remHour">Evening nudge at</label><select id="remHour"></select></div>
-          <div class="field"><label class="label" for="remMHour">Morning recovery from</label><select id="remMHour"></select></div>
+          <div class="field"><label class="label" for="remHour">Evening recap at</label><select id="remHour"></select></div>
+          <div class="field"><label class="label" for="remMHour">Morning brief from</label><select id="remMHour"></select></div>
         </div>
         <div class="seg" id="segRem" style="margin-top:10px">
-          <button type="button" data-v="log" aria-pressed="true">Log the day</button>
-          <button type="button" data-v="protein" aria-pressed="true">Protein day</button>
-          <button type="button" data-v="waist" aria-pressed="true">Sunday waist</button>
           <button type="button" data-v="morning" aria-pressed="true">Morning recovery</button>
-          <button type="button" data-v="history" aria-pressed="true">Weekly Health refresh</button>
+          <button type="button" data-v="protein" aria-pressed="true">Protein days</button>
+          <button type="button" data-v="waist" aria-pressed="true">Sunday check-in</button>
+          <button type="button" data-v="log" aria-pressed="true">Evening recap</button>
+          <button type="button" data-v="weekly" aria-pressed="true">Weekly brief</button>
+          <button type="button" data-v="stalled" aria-pressed="true">Watch sync alerts</button>
         </div>
         <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="remOn">Turn on reminders</button><button class="btn" type="button" id="remTest" hidden>Test on this phone</button><button class="btn danger" type="button" id="remOff" hidden>Turn off</button></div>
         <small id="remMsg"></small>

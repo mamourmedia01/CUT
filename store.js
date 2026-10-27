@@ -64,6 +64,7 @@
       // One full re-download for phones that got stuck on the old 1,000-row download
       if (!(await get('meta', 'pullV2'))) { state.lastPull = null; await put('meta', 'pullV2', true); }
       state.lastSyncAt = (await get('meta', 'lastSyncAt')) || null;
+      state.profile = (await get('meta', 'profile')) || null;
       state.healthOutbox = new Set((await get('meta', 'healthOutbox')) || []);
       // Ask the browser to never clear this app's storage on its own (granted automatically
       // for Home Screen apps on iPhone and for installed apps elsewhere).
@@ -104,7 +105,8 @@
       const health = state.days[id] && state.days[id].health;
       const clean = rec ? Object.assign({}, rec) : {};
       delete clean.health;
-      const empty = !Object.values(clean).some(v => v !== null && v !== false && v !== undefined && v !== '');
+      // protein: false is real information (a skipped shake), so it keeps the day
+      const empty = !Object.entries(clean).some(([k, v]) => k === 'protein' ? v === true || v === false : v !== null && v !== false && v !== undefined && v !== '');
       if (empty && !health) { delete state.days[id]; await del('days', id); }
       else { state.days[id] = Object.assign(empty ? {} : clean, health ? { health } : {}); await put('days', id, state.days[id]); }
       if (sb) { state.outbox.add(id); await saveOutbox(); Store.syncSoon(); }
@@ -209,14 +211,36 @@
     },
 
     // ---------- account ----------
-    async signOut() { if (sb) await sb.auth.signOut(); user = null; await del('meta', 'lastPull'); state.lastPull = null; setStatus('signedout'); emit('auth'); },
+    async signOut() { if (sb) await sb.auth.signOut(); user = null; state.profile = null; await del('meta', 'profile'); await del('meta', 'lastPull'); state.lastPull = null; setStatus('signedout'); emit('auth'); },
     // First time on this phone with this account: upload everything already on the phone, then sync.
     async _onUser() {
       if (!user) return;
       Store.refreshPasskeys();
+      Store.loadProfile().catch(() => {});
       const done = await get('meta', 'uploadedFor');
       if (done !== user.id && Object.keys(state.days).length) { await Store.firstSyncUploadAll(); await put('meta', 'uploadedFor', user.id); }
       else { if (done !== user.id) await put('meta', 'uploadedFor', user.id); await Store.sync(); }
+    },
+    // ---------- profile: username + name ----------
+    get profile() { return state.profile || null; },
+    async loadProfile() {
+      if (!sb || !user) return null;
+      const { data, error } = await sb.from('profiles').select('username,display_name').eq('user_id', user.id).maybeSingle();
+      if (error) throw error;
+      state.profile = data || null; await put('meta', 'profile', state.profile); emit('auth'); return state.profile;
+    },
+    async setProfile(username, display) {
+      if (!sb || !user) throw new Error('Sign in first.');
+      const { data, error } = await sb.rpc('set_profile', { p_username: username || null, p_display: display || null });
+      if (error) throw new Error(/taken/.test(error.message) ? 'That username is taken. Try another.' : /bad username/.test(error.message) ? 'Usernames are 3 to 20 characters: letters, numbers, _ and .' : (error.message || 'Couldn’t save that.'));
+      state.profile = data; await put('meta', 'profile', data); emit('auth'); return data;
+    },
+    async usernameFree(u) { if (!sb || !user) return true; const { data } = await sb.rpc('username_free', { p_username: u }); return data !== false; },
+    async signInUsername(username, password) {
+      if (!sb) throw new Error('Sync isn’t connected yet.');
+      const j = await Store._fn('login', { username, password });
+      const { error } = await sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token });
+      if (error) throw error;
     },
     get isAnonymous() { return !!(user && (user.is_anonymous || (!user.email && !user.phone))); },
     get autoBackup() { return state.autoBackup; },

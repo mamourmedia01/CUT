@@ -1,5 +1,5 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
-const VERSION = 'cutlog-v19';
+const VERSION = 'cutlog-v20';
 const SHELL = [
   './', './index.html', './health.js', './body.js', './health-import-worker.js', './vendor/fflate.min.js', './app.js', './store.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
@@ -39,7 +39,7 @@ self.addEventListener('fetch', e => {
 // Push notifications (sent by the scheduled GitHub Action once Supabase is connected).
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Cut Log', { body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: d.url || './#log' } }));
+  e.waitUntil(self.registration.showNotification(d.title || 'Cut Log', { body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: d.url || './#log' }, tag: d.tag || undefined }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
