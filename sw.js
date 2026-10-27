@@ -1,7 +1,7 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
 // V is bumped on every release (scripts/bump.sh), together with the ?v= on each file in index.html,
 // so a new page can never run with an old script.
-const V = '22';
+const V = '23';
 const VERSION = 'cutlog-v' + V;
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './vendor/fflate.min.js', './health-import-worker.js',

@@ -31,6 +31,12 @@
   ];
 
   const plan = () => Store.plan;
+  // open a collapsible section (Settings rows, Log details) that holds `id`, then bring it into view
+  function reveal(id, block) {
+    const el = document.getElementById(id); if (!el) return;
+    let d = el.tagName === 'DETAILS' ? el : el.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+    setTimeout(() => { try { el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: block || 'start' }); } catch (e) {} }, 30);
+  }
   const SW_V = (document.querySelector('script[src^="app.js?v="]') || { getAttribute: () => '' }).getAttribute('src').split('v=')[1] || '0';
   const days = () => Store.days;
   let today = new Date();
@@ -383,6 +389,7 @@
     const sunday = dt.getDay() === 0;
     $('selSub').innerHTML = sunday ? 'Weekly check-in day <span class="chip">+50 XP</span>' : '';
     $('waistField').classList.toggle('hl', sunday && r.waist == null);
+    if ((sunday && r.waist == null) || r.weight != null || r.food != null || r.gymKcal != null) $('numBox').open = true;
     setSeg($('segMark'), { done: r.mark === 'done', cheat: r.mark === 'cheat', broken: r.broken });
     $('autoNote').hidden = !(r.auto && r.mark === 'done');
     const gn = sessOf(r), fromW = !userSess(r) && gn > 0;
@@ -457,23 +464,23 @@
     const hm = String(p.autoHour != null ? p.autoHour : 12).padStart(2, '0') + ':00';
     if (started) {
       if (r.mark === 'done') items.push(['ok', IC.ok, 'Today is locked in', 'Streak ' + st.run + (r.auto ? ' · by Autopilot' : '')]);
-      else if (r.mark === 'cheat') items.push(['warn', IC.cheat, 'Cheat day logged', 'Reset tomorrow. The boss heals, the streak restarts.', 'Undo', () => setMark(tId, null)]);
-      else if (autoOn) items.push(['auto', IC.auto, 'Autopilot has today', 'Completes at ' + hm + ' tomorrow. Only a cheat needs a tap.', 'Cheat day', () => setMark(tId, 'cheat')]);
+      else if (r.mark === 'cheat') items.push(['warn', IC.cheat, 'Cheat day logged', 'Fresh start tomorrow', 'Undo', () => setMark(tId, null)]);
+      else if (autoOn) items.push(['auto', IC.auto, 'Autopilot has today', 'Completes ' + hm + ' tomorrow', 'Cheat day', () => setMark(tId, 'cheat')]);
       else items.push(['', IC.log, 'Log today', st.run ? 'Make it ' + (st.run + 1) + ' in a row.' : 'Start the run.', 'Complete', () => setMark(tId, 'done')]);
-      if (y.auto && y.mark === 'done' && yId >= p.start) items.push(['', IC.auto, 'Yesterday auto-completed', 'Was it a cheat day?', 'Mark cheat', () => setMark(yId, 'cheat')]);
+      if (y.auto && y.mark === 'done' && yId >= p.start) items.push(['', IC.auto, 'Yesterday auto-completed', 'Was it a cheat?', 'Mark cheat', () => setMark(yId, 'cheat')]);
     }
     if (started && window.CutHealth && CutHealth.train) {
       const tp = CutHealth.train(bodyScores[tId] || {});
-      items.push([tp.key === 'green' ? 'ok' : tp.key === 'red' ? 'warn' : 'prot', IC.lift, 'Training: ' + tp.name, 'Strain target ' + tp.lo + '–' + tp.hi + (tp.strain != null ? ' · now ' + tp.strain.toFixed(1) + (tp.status === 'hit' ? ', target reached' : tp.status === 'over' ? ', over' : '') : ' · ' + tp.am[0]), 'Plan', () => show('body')]);
+      items.push([tp.key === 'green' ? 'ok' : tp.key === 'red' ? 'warn' : 'prot', IC.lift, 'Training: ' + tp.name, 'Strain ' + tp.lo + '–' + tp.hi + (tp.strain != null ? ' · now ' + tp.strain.toFixed(1) + (tp.status === 'hit' ? ' ✓' : tp.status === 'over' ? ' (over)' : '') : ''), 'Plan', () => show('body')]);
     }
     const pr = st.prot[tId];
     const next = Object.keys(st.prot).filter(id => id > tId && st.prot[id].taken).sort()[0];
-    if (pr && pr.taken) items.push(['prot', IC.shake, 'Protein day', (p.shake ? p.shake + ' · ' : '') + 'about ' + kfmt(p.proteinKcal) + ' kcal', pr.status === 'scheduled' && r.protein == null ? 'Skip' : null, () => change(tId, x => { x.protein = false; }, 'Shake skipped')]);
+    if (pr && pr.taken) items.push(['prot', IC.shake, 'Protein day', p.shake || 'about ' + kfmt(p.proteinKcal) + ' kcal', pr.status === 'scheduled' && r.protein == null ? 'Skip' : null, () => change(tId, x => { x.protein = false; }, 'Shake skipped')]);
     else if (pr && !pr.taken) items.push(['', IC.shake, 'Shake skipped today', next ? 'Next ' + dayName(parseId(next)) : '', 'Undo', () => change(tId, x => { x.protein = null; }, 'Protein day back on')]);
     else if (next) items.push(['', IC.shake, 'Water day', 'Next shake ' + dayName(parseId(next))]);
     if (today.getDay() === 0 && started) {
       const doneSun = r.waist != null;
-      items.push([doneSun ? 'ok' : 'blue', doneSun ? IC.ok : IC.scale, 'Sunday check-in', doneSun ? 'Waist logged · +50 XP' : 'Weigh in, waist (+50 XP) and this week’s photo', doneSun ? null : 'Open', () => { sel = tId; show('log'); setTimeout(() => { const f = $('fWaist'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } }, 80); }]);
+      items.push([doneSun ? 'ok' : 'blue', doneSun ? IC.ok : IC.scale, 'Sunday check-in', doneSun ? 'Waist logged · +50 XP' : 'Weigh in, waist (+50 XP) and this week’s photo', doneSun ? null : 'Open', () => { sel = tId; show('log'); render(); setTimeout(() => { reveal('fWaist', 'center'); $('fWaist').focus(); }, 80); }]);
     }
     const lw = watchLast();
     if (lw && Date.now() - Date.parse(lw) > 36 * 3600e3) items.push(['warn', IC.watch, 'Watch sync paused', 'Nothing since ' + ago(lw) + '. Run the Shortcut once.', 'Sync', () => { location.href = 'shortcuts://run-shortcut?name=Cut%20Log%20Sync'; }]);
@@ -485,7 +492,7 @@
   // a <label for=mealInput>: the iPhone opens the camera/library itself; we just move to today's Log
   $('homeMeal').addEventListener('click', () => { sel = idOf(today); show('log'); render(); });
   $('homeBody').addEventListener('click', () => show('body'));
-  $('meChip').addEventListener('click', () => { show('settings'); setTimeout(() => { $('acct').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); });
+  $('meChip').addEventListener('click', () => { show('settings'); setTimeout(() => reveal('acct'), 60); });
   $('agenda').addEventListener('click', e => { const b = e.target.closest('[data-ag]'); if (b && agendaActs[b.dataset.ag]) agendaActs[b.dataset.ag](); });
 
   // ---------- Home: last 7 days (the same numbers as the Sunday brief) ----------
@@ -575,7 +582,7 @@
     const b = e.target.closest('[data-goto]'); if (!b) return;
     const id = b.dataset.goto, inSettings = ['impCard', 'watchCard', 'remCard'].includes(id);
     if (inSettings) show('settings', false);
-    setTimeout(() => { const el = $(id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (id === 'watchCard') $('wGuide').open = true; }, 60);
+    setTimeout(() => { if (!$(id)) return; reveal(id); if (id === 'watchCard') $('wGuide').open = true; }, 60);
   });
   $('openBody').addEventListener('click', () => show('body'));
   // while Body is on screen, pull new watch data every 20 seconds
@@ -927,7 +934,7 @@
       const v = e1rm(s[0], s[1]); if (v > b.e) { b.e = v; b.best = s; } b.last = d;
     })));
     const names = Object.keys(by).sort((a, b) => by[b].last.localeCompare(by[a].last));
-    $('strCount').textContent = names.length ? names.length + ' exercise' + (names.length > 1 ? 's' : '') : '';
+    $('strCount').textContent = (names.length ? names.length + ' exercise' + (names.length > 1 ? 's' : '') + ' · ' : '') + (last ? last.pbs : 0) + ' PB' + ((last ? last.pbs : 0) === 1 ? '' : 's');
     $('strRows').innerHTML = names.length ? names.map(n => '<tr><td><div class="wk" style="font-size:.95rem">' + esc(n) + '</div></td><td>' + esc(setTxt(by[n].best)) + '</td><td>' + (by[n].best[0] ? Math.round(by[n].e) + ' kg' : '–') + '</td><td>' + esc(fmt(parseId(by[n].last))) + '</td></tr>').join('')
       : '<tr><td colspan="4" class="muted" style="padding:12px 0;color:var(--muted)">No lifts logged yet. Open Log, pick today and add an exercise.</td></tr>';
   }
@@ -965,15 +972,19 @@
     if (k === 'whatif') {
       const m = q.match(/(\d[\d,]*)\s*(k?cal|calories)?/); const kcal = m ? +m[1].replace(/,/g, '') : null;
       if (kcal == null) return '<p>Give me a number, e.g. “what if I eat 1,500 kcal tomorrow?”</p>';
-      const burn = p.baseBurn + p.sessionKcal * Math.max(1, Math.round(st.sessions / Math.max(1, diff(parseId(p.start), today)))), d = burn - kcal, kg = d / p.kcalPerKg;
-      return '<p>On a normal gym day you burn about ' + b1(kfmt(burn) + ' kcal') + '. Eating ' + b1(kfmt(kcal) + ' kcal') + ' leaves a ' + (d >= 0 ? 'deficit' : 'surplus') + ' of ' + b1(kfmt(Math.abs(d)) + ' kcal') + ', about ' + b1((kg >= 0 ? '−' : '+') + Math.abs(kg).toFixed(2) + ' kg') + ' on the next morning’s estimate.</p>' +
+      // your real burn: last 7 days of resting + active calories from the watch (plan numbers where the watch had none)
+      const bs = []; for (let i = 1; i <= 7; i++) { const id = idOf(addDays(today, -i)); if (id < p.start) break; const en = energy(id, Object.assign({}, rec(id), { mark: rec(id).mark || 'done' }), st.prot); if (en) bs.push(en.burn); }
+      const fromWatch = bs.length >= 3, burn = Math.round(fromWatch ? bs.reduce((a, b) => a + b, 0) / bs.length : p.baseBurn + p.sessionKcal), d = burn - kcal, kg = d / p.kcalPerKg;
+      return '<p>' + (fromWatch ? 'Your last ' + bs.length + ' days averaged a burn of ' : 'A normal gym day burns about ') + b1(kfmt(burn) + ' kcal') + (fromWatch ? ' (resting + active, from your watch)' : '') + '. Eating ' + b1(kfmt(kcal) + ' kcal') + ' leaves a ' + (d >= 0 ? 'deficit' : 'surplus') + ' of ' + b1(kfmt(Math.abs(d)) + ' kcal') + ', about ' + b1((kg >= 0 ? '−' : '+') + Math.abs(kg).toFixed(2) + ' kg') + ' on the next morning’s estimate.</p>' +
         '<p>Compared with a water day (about −' + ((burn - 0) / p.kcalPerKg).toFixed(2) + ' kg), that costs ' + (kcal / p.kcalPerKg).toFixed(2) + ' kg of progress.</p>';
     }
     if (k === 'weight') {
       const left = Math.max(0, st.est - p.goal), eta = c.pace7 > 0.01 ? addDays(today, Math.ceil(left / c.pace7)) : null;
       const toSun = (7 - today.getDay()) % 7 || 7, sunKg = st.tomorrow - Math.max(0, c.pace7) * (toSun - 1);
       out.push('<p>You’re at about ' + b1(st.est.toFixed(1) + ' kg') + ' this morning (' + (st.lastWeigh ? 'last weighed ' + fmt(parseId(st.lastWeigh)) : 'estimate') + '), ' + b1(c.lost.toFixed(1) + ' kg') + ' down from ' + p.startWeight + ' kg.</p>');
-      out.push('<p>Last 7 days you averaged ' + b1((c.pace7 * 7).toFixed(1) + ' kg a week') + '. At that pace: about ' + b1(sunKg.toFixed(1) + ' kg') + ' on Sunday’s weigh-in, and ' + p.goal + ' kg ' + (left <= 0 ? b1('reached') : eta ? 'around ' + b1(fmt(eta)) : 'not yet in sight') + '.</p>');
+      const etaAll = c.pace > 0.01 ? addDays(today, Math.ceil(left / c.pace)) : null;
+      out.push('<p>Since the start you’ve averaged ' + b1((c.pace * 7).toFixed(1) + ' kg a week') + ' (' + c.pace.toFixed(2) + ' a day); the last 7 days ' + b1((c.pace7 * 7).toFixed(1) + ' kg a week') + '.</p>');
+      out.push('<p>At your recent pace: about ' + b1(sunKg.toFixed(1) + ' kg') + ' on Sunday’s weigh-in. ' + p.goal + ' kg ' + (left <= 0 ? b1('reached') : (etaAll ? 'around ' + b1(fmt(etaAll)) + ' at your overall pace' : '') + (eta && etaAll && fmt(eta) !== fmt(etaAll) ? ', ' + fmt(eta) + ' at your recent pace' : '')) + '.</p>');
       if (left > 0 && c.pace7 * 7 > 2.5) out.push('<p>That’s a fast rate. Keep the protein days and strength work going so it’s fat, not muscle.</p>');
       return out.join('');
     }
@@ -1016,7 +1027,7 @@
     if (k === 'food') {
       const ms = rec(tId).meals || []; let cheats = 0; for (let d = parseId(p.start); d <= today; d = addDays(d, 1)) if (rec(idOf(d)).mark === 'cheat') cheats++;
       const en = energy(tId, Object.assign({}, rec(tId), { mark: rec(tId).mark || 'done' }), st.prot);
-      out.push('<p>' + (ms.length ? 'Today: ' + esc(ms.map(m => m.n + ' ' + kfmt(m.k)).join(', ')) + ' kcal.' : 'No meals logged today.') + (en ? ' Eaten so far about ' + b1(kfmt(en.food) + ' kcal') + ', deficit ' + b1(kfmt(en.deficit)) + '.' : '') + '</p>');
+      out.push('<p>' + (ms.length ? 'Today: ' + esc(ms.map(m => m.n + ' ' + kfmt(m.k)).join(', ')) + ' kcal.' : 'No meals logged today.') + (en ? ' Eaten so far about ' + b1(kfmt(en.food) + ' kcal') + '; your deficit so far today is ' + b1(kfmt(en.deficit) + ' kcal') + ' (it grows as your watch counts the rest of the day).' : '') + '</p>');
       out.push('<p>' + cheats + ' cheat day' + (cheats === 1 ? '' : 's') + ' since ' + fmt(parseId(p.start)) + '. A cheat day costs about ' + (p.baseBurn / p.kcalPerKg).toFixed(2) + ' kg of progress against a water day.</p>');
       const ins = CH ? CH.insights(days(), bodyScores, id => rec(id).mark === 'cheat', id => rec(id).mark === 'done', id => sessOf(rec(id))).find(i => i.label === 'cheat') : null;
       if (ins) out.push('<p>' + esc(ins.text) + '</p>');
@@ -1049,6 +1060,7 @@
     }
     return '<p>I answer from your own numbers. Ask me things like:</p><p>“What should I train today?”, “When will I hit ' + p.goal + ' kg?”, “How did I sleep?”, “Why is my recovery low?”, “Next protein day?”, “What if I eat 1,500 kcal tomorrow?”, “How’s my week going?”, “What are my bests?”</p>';
   }
+  window.__coachProbe = () => { const c = coachCtx(); return { est: c.st.est, tomorrow: c.st.tomorrow, lost: c.lost, pace: c.pace, pace7: c.pace7, run: c.st.run, best: c.st.best, tee: c.st.tee, xp: c.st.xp, sleep: c.sc.sleep, sleepSrc: c.sc.sleepSrc, recovery: c.sc.recovery }; };
   const COACH_SUG = () => { const p = plan(), pr = last && last.prot[idOf(today)]; return ['What should I train today?', 'When will I hit ' + p.goal + ' kg?', 'How did I sleep?', 'How’s my week going?', pr && pr.taken ? 'What’s my shake today?' : 'Next protein day?', 'Why is my recovery where it is?', 'What if I eat 1,500 kcal tomorrow?', 'What are my bests?']; };
   function coachSay(who, html) { const d = document.createElement('div'); d.className = 'msg ' + who; d.innerHTML = html; $('coachLog').appendChild(d); $('coachLog').scrollTop = $('coachLog').scrollHeight; }
   function coachAsk(q) { if (!q.trim()) return; coachSay('you', esc(q)); try { coachSay('bot', coachAnswer(q)); } catch (e) { console.error(e); coachSay('bot', '<p>I couldn’t work that one out. Try asking another way.</p>'); } }
@@ -1067,6 +1079,10 @@
   function renderWater(el, id) {
     const r = rec(id), goal = plan().waterGoal || 3000, w = r.water || 0, pct = Math.min(100, w / goal * 100);
     const isToday = id === idOf(today);
+    if (el.id === 'homeWater') { // compact on Home: one row
+      el.innerHTML = '<div class="wrow"><span class="wlab"><small>Water</small><b>' + L(w) + '<small> / ' + L(goal) + ' L</small></b></span><div class="wbar" role="img" aria-label="' + L(w) + ' of ' + L(goal) + ' litres"><i style="width:' + pct + '%"></i></div><button type="button" data-w="250" aria-label="Add 250 ml">+250</button><button type="button" data-w="500" aria-label="Add 500 ml">+500</button></div>';
+      el.dataset.day = id; return;
+    }
     el.innerHTML = '<div class="wtop"><span class="label">Water' + (isToday ? '' : ' · ' + esc(fmt(parseId(id)))) + '</span><span>' + (w >= goal ? 'Goal hit' : L(goal - w) + ' L to go') + '</span></div>' +
       '<div class="wtop"><b>' + L(w) + ' <small style="font-size:.85rem;color:var(--muted)">/ ' + L(goal) + ' L</small></b></div>' +
       '<div class="wbar" role="img" aria-label="' + L(w) + ' of ' + L(goal) + ' litres"><i style="width:' + pct + '%"></i></div>' +
@@ -1169,10 +1185,19 @@
 
   // ---------- settings ----------
   const SET = [['sStart', 'start', 'd'], ['sStartW', 'startWeight'], ['sGoal', 'goal'], ['sBase', 'baseBurn'], ['sSess', 'sessionKcal'], ['sPerKg', 'kcalPerKg'], ['sProtK', 'proteinKcal'], ['sProtE', 'proteinEvery'], ['sProtA', 'proteinAnchor', 'd'], ['sWeeks', 'markWeeks'], ['sShake', 'shake', 't'], ['sBf', 'bfGoal'], ['sWater', 'waterGoal']];
+  let acctWasOpenSignedIn = false;
   function renderSettings() {
     const p = plan();
     SET.forEach(([i, k]) => { if (document.activeElement !== $(i)) $(i).value = p[k] != null ? p[k] : ''; });
     renderAuto(); renderProfile();
+    { const u0 = Store.user, pr = Store.profile || {}, nm = pr.display_name || pr.username || '';
+      $('phInit').textContent = u0 ? (nm ? nm.replace(/^@/, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2) : (u0.email || '•')[0]) : '•';
+      $('phName').textContent = u0 ? (pr.display_name || (pr.username ? '@' + pr.username : 'Your account')) : 'Not signed in';
+      $('phSub').textContent = u0 ? [pr.username && pr.display_name ? '@' + pr.username : '', u0.email || ''].filter(Boolean).join(' · ') + ' · ' + ($('syncText').textContent || '') : 'Sign in to sync and back up';
+      $('appVer').textContent = SW_V;
+      if (!u0 && Store.connected) $('acct').open = true;
+      if (u0 && !acctWasOpenSignedIn && $('acct').open && renderSettings._signedOut) $('acct').open = false;
+      renderSettings._signedOut = !u0; }
     const cfg = !!Store.connected, u = Store.user, anon = Store.isAnonymous;
     $('acctNoCfg').hidden = cfg; $('acctForm').hidden = !cfg || (!!u && !showSignIn); $('acctIn').hidden = !u || anon; $('acctAnon').hidden = !u || !anon || showSignIn;
     if (u && !anon) {
@@ -1302,7 +1327,7 @@
     try {
       authMsg('Creating your account…');
       const r = await Store.createAccount(em, chosenPw);
-      if (r === 'in') { authMsg(''); showSignIn = false; renderSettings(); toast('Account created. Now turn on Face ID.'); setTimeout(() => { const b = $('pkAdd'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80); }
+      if (r === 'in') { authMsg(''); showSignIn = false; renderSettings(); toast('Account created. Now turn on Face ID.'); setTimeout(() => reveal('pkAdd', 'center'), 80); }
       else authMsg('Check your email and tap the link to finish.');
     } catch (e) {
       authMsg(/already|exists|registered/i.test((e.code || '') + (e.message || '')) ? 'You already have an account with that email. Tap Sign in above.' : (e.message || 'Couldn’t create the account. Check you’re online.'));
@@ -1446,7 +1471,7 @@
       if (Store.user && !Store.isAnonymous) Store.passkeyAdd().then(() => { toast('Face ID sign-in is on'); renderSetup(); }).catch(err => toast(esc(pkError(err))));
       else { show('settings'); setTimeout(() => { const f = Store.user ? $('lEmail') : $('aEmail'); if (f) f.focus(); }, 60); }
     }
-    else if (k === 'watch') { show('settings'); setTimeout(() => { $('watchCard').scrollIntoView({ behavior: 'smooth' }); $('wGuide').open = true; }, 50); }
+    else if (k === 'watch') { show('settings'); setTimeout(() => { reveal('watchCard'); $('wGuide').open = true; }, 50); }
   });
   $('setupHide').addEventListener('click', async () => {
     setupHidden = true; $('setup').hidden = true;
@@ -1485,7 +1510,7 @@
       renderSafe();
     } catch (e) { $('safeMsg').textContent = navigator.onLine ? (e.message || 'The check didn’t finish.') : 'You’re offline. Your data is safe on the phone; check again when you’re online.'; }
   });
-  $('safeBannerGo').addEventListener('click', () => { show('settings', true); setTimeout(() => { $('acct').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); });
+  $('safeBannerGo').addEventListener('click', () => { show('settings', true); setTimeout(() => reveal('acct'), 60); });
 
   // reminders (web push)
   const REM_KEY = 'cutlog-rem';

@@ -284,7 +284,7 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .lift .lh button,.lift .sets button{border:0;background:none;color:var(--muted);cursor:pointer;min-width:32px;min-height:32px;font-size:1rem}
 .lift .last{font-size:.78rem;color:var(--muted)}
 .lift .sets{display:flex;flex-wrap:wrap;gap:6px}
-.lift .sets span{white-space:nowrap;display:inline-flex;align-items:center;gap:2px;padding:0 0 0 10px;border-radius:999px;background:var(--surface-2);font-size:.85rem;font-weight:600;font-variant-numeric:tabular-nums}
+.lift .sets span{white-space:nowrap;display:inline-flex!important;flex-direction:row!important;width:auto!important;align-items:center;gap:2px;padding:0 0 0 10px;border-radius:999px;background:var(--surface-2);font-size:.85rem;font-weight:600;font-variant-numeric:tabular-nums}
 .lift .sets span.pb{background:var(--xp);color:var(--xp-ink)}
 .lift .addset{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
 .lift .addset input{min-width:0}
@@ -309,6 +309,77 @@ input[type=number],input[type=email],input[type=password],input[type=text],input
 .targets span{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .targets b{font-family:var(--display);font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
 .targets i{font-style:normal;font-size:.76rem;color:var(--muted)}
+/* Home v2: calmer layout */
+.card.today{gap:12px}
+.agenda{gap:6px}
+.agenda li{min-height:0;padding:8px 10px;gap:10px}
+.agenda li .ic{width:26px;height:26px;border-radius:8px}
+.agenda li .ic svg{width:15px;height:15px}
+.agenda li b{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agenda li span{font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agenda li .btn{min-height:32px;padding:0 10px;font-size:.78rem}
+#homeWater{padding:10px 12px}
+.wrow{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px}
+.wrow .wlab{display:grid;line-height:1.1}.wrow .wlab small{font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.wrow .wlab b{font-family:var(--display);font-size:1.15rem;font-weight:800;font-variant-numeric:tabular-nums}
+.wrow .wlab b small{font-size:.75rem;color:var(--muted);letter-spacing:0;text-transform:none}
+.wrow button{font:inherit;font-weight:700;font-size:.8rem;min-height:36px;min-width:52px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.quick>*{font:inherit;font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+.quick svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.slimtiles>div{padding:8px 10px!important}.slimtiles b{font-size:1.1rem!important}
+.btns.slim .btn{min-height:38px;font-size:.85rem}
+.sixwk{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.prog{gap:12px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pc{border-radius:var(--r-md);padding:12px;display:grid;gap:2px}
+.pc.orange{background:var(--primary);color:var(--on-primary)}.pc.blue{background:var(--blue);color:#fff}
+.pc .label{color:inherit;opacity:.85}
+.pc .num{font-family:var(--display);font-weight:800;font-size:2.4rem;line-height:1}
+.pc small{font-size:.72rem;color:inherit!important;opacity:.9}
+.pc .flame{width:20px;height:20px}.pc .tee-ico{width:20px;height:20px}
+.plvl{display:grid;gap:6px}.plvl .lvlname{font-size:1.3rem}.plvl .lvlbadge{font-size:.85rem;padding:2px 8px}.plvl small{color:var(--muted);font-size:.76rem}
+.pboss{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.pboss .bossline{font-family:var(--display);font-size:1.1rem;font-weight:800;text-transform:uppercase}
+.pboss .hp i{height:10px}
+.pboss small{color:var(--muted);font-size:.78rem}
+.badges .bgrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 6px}
+.badges .medal{width:46px;height:46px;border-radius:13px;font-size:1rem}
+.badges .badge b{font-size:.78rem}
+.badges .badge small{display:none}
+/* Log: sections */
+.lsec{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:14px}
+.lsh{margin:0;font-family:var(--display);font-size:1.05rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.lsh small{font-family:var(--body);font-size:.72rem;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+.seg.seg3{display:grid;grid-template-columns:repeat(3,1fr)}
+.seg.seg3 button{padding-inline:6px}
+.lnum>summary{cursor:pointer;font-weight:600;font-size:.88rem;color:var(--muted);padding:6px 0;list-style:none;display:flex;align-items:center;gap:8px}
+.lnum>summary::-webkit-details-marker{display:none}
+.lnum>summary::before{content:"+";display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink);font-weight:700}
+.lnum[open]>summary::before{content:"−"}
+.lnum[open]>summary{margin-bottom:10px}
+.mealbtns{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px}
+.mealbtns>*{justify-content:center;padding:0 8px!important;font-size:.85rem!important;text-align:center}
+/* Settings: grouped list */
+.profhead{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
+.profhead div{display:grid;gap:2px;min-width:0}.profhead b{font-family:var(--display);font-size:1.35rem;font-weight:800;text-transform:uppercase;letter-spacing:.01em}
+.profhead span:not(.me){font-size:.82rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me.big{width:52px;height:52px;font-size:1.4rem;cursor:default}
+.sgh{margin:20px 6px 8px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sgroup{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.srow+.srow{border-top:1px solid var(--line)}
+.srow>summary{list-style:none;display:flex;align-items:center;gap:12px;padding:10px 14px;min-height:60px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.srow>summary::-webkit-details-marker{display:none}
+.srow>summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);flex:none;margin-left:2px;transition:transform .15s}
+.srow[open]>summary::after{transform:rotate(45deg)}
+.srow>summary:active{background:var(--surface-2)}
+.sic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff}
+.sic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.stt{flex:1;min-width:0;display:grid;gap:1px;font-weight:600;font-size:.95rem}
+.stt small{font-weight:400;font-size:.76rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sst{font-size:.76rem;font-weight:600;color:var(--muted);text-align:right;max-width:38%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbody{padding:2px 14px 18px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.appfoot{text-align:center;font-size:.75rem;color:var(--muted);margin:22px 0 6px}
 /* Home: Today agenda + last 7 days */
 .card.today{gap:10px}
 .hello{margin:0;font-family:var(--display);font-size:1.45rem;font-weight:800;text-transform:uppercase;letter-spacing:.01em;line-height:1.05}
@@ -553,45 +624,66 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="row"><h3 class="hello" id="hello">Today</h3><span class="label" id="todayDate"></span></div>
       <ul class="agenda" id="agenda"></ul>
       <div class="water" id="homeWater"></div>
-      <div class="btns"><label class="btn" for="mealInput" id="homeMeal" role="button" tabindex="0" style="display:inline-flex;align-items:center">Snap a meal</label><button class="btn" type="button" id="homeBody">Today’s training</button><button class="btn" type="button" id="homeCoach">Ask coach</button></div>
-    </div>
-
-    <div class="card" style="gap:8px">
-      <div class="row"><span class="label" id="goalLabel">102 kg to 85 kg</span><span class="label" id="dates"></span></div>
-      <div class="track" aria-hidden="true"><i id="trackFill" style="width:0%"></i></div>
-      <div class="trackrow"><span id="sixWk"></span></div>
-    </div>
-
-    <div class="hud">
-      <div class="block orange">
-        <div class="row"><span class="label">Cut streak</span>
-          <svg class="flame" id="flame" viewBox="0 0 24 24" aria-hidden="true"><path class="outer" d="M12 1.5c.6 3.6 5.8 6.2 5.8 12a5.8 5.8 0 0 1-11.6 0c0-3.2 1.8-4.6 2.3-7.4 1.2 1 2 2.4 2.1 4.2 1.3-2.4 1.6-5.4 1.4-8.8z"/><path class="inner" d="M12 12.2c.4 1.6 2.7 2.6 2.7 5a2.7 2.7 0 0 1-5.4 0c0-1.5.9-2.2 1.2-3.4.6.5 1 1.2 1 2 .5-1.1.6-2.3.5-3.6z"/></svg>
-        </div>
-        <span class="num" id="stStreak">0</span>
-        <small id="stStreakSub">days in a row</small>
-      </div>
-      <div class="block blue">
-        <div class="row"><span class="label">Testosterone</span>
-          <svg class="tee-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 7.5h8v2.4h-2.8V17h-2.4V9.9H8z"/></svg>
-        </div>
-        <span class="num" id="stTee">0</span>
-        <small id="stTeeSub">days since last break</small>
-      </div>
-      <div class="card lvl">
-        <div class="row"><div class="lvlrow"><span class="lvlbadge" id="lvlNum">LV 1</span><span class="lvlname" id="lvlName">Rookie</span></div><span class="label">Level</span></div>
-        <div class="bar xp" aria-hidden="true"><i id="xpFill" style="width:0%"></i></div>
-        <small id="xpText">0 XP</small>
+      <div class="quick">
+        <label for="mealInput" id="homeMeal" role="button" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Meal</label>
+        <button type="button" id="homeBody"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M6 8v8M18 8v8M3 10v4M21 10v4"/></svg>Training</button>
+        <button type="button" id="homeCoach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Coach</button>
       </div>
     </div>
-
-    <button class="cta" type="button" id="ctaLog">Log today</button>
 
     <div class="card" id="bodyToday" hidden>
       <div class="row"><span class="label">Body today</span><span class="label" id="wtWhen"></span></div>
       <div class="rings" id="rings"></div>
       <p class="note" id="bodyNote" hidden></p>
-      <div class="tiles3 tiles4" id="bodyTiles"></div>
-      <div class="btns"><button class="btn primary" type="button" id="openBody">Open Body</button><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
+      <div class="tiles3 tiles4 slimtiles" id="bodyTiles"></div>
+      <div class="btns slim"><button class="btn primary" type="button" id="openBody">Open Body</button><a class="btn" href="shortcuts://run-shortcut?name=Cut%20Log%20Sync">Sync watch now</a></div>
+    </div>
+
+    <div class="card countdown">
+      <div class="row"><span class="label" id="kgTitle">Countdown to 85 kg</span><span class="label" id="kgSource">Estimate</span></div>
+      <div class="kgbig"><span class="num" id="kgNow">–</span><span>kg this morning</span></div>
+      <small id="kgLeft"></small>
+      <div class="targets">
+        <div><span>Tomorrow morning</span><b id="wake">–</b><i id="wakeD"></i></div>
+        <div><span id="wkTgtLbl">Sunday weigh-in</span><b id="wkTgt">–</b><i id="wkTgtD"></i></div>
+      </div>
+      <div class="bar kg" aria-hidden="true"><i id="kgFill" style="width:0%"></i></div>
+      <div class="ends"><span id="kgStartLbl"></span><span id="kgGoalLbl"></span></div>
+      <div class="tiles3 slimtiles">
+        <div><b id="perDay">0.00</b><span>kg a day</span></div>
+        <div><b id="perWeek">0.0</b><span>kg a week</span></div>
+        <div><b id="eta">–</b><span>goal at this pace</span></div>
+      </div>
+      <div class="sixwk">
+        <div class="row"><span class="label" id="goalLabel">102 kg to 85 kg</span><span class="label" id="dates"></span></div>
+        <div class="track" aria-hidden="true"><i id="trackFill" style="width:0%"></i></div>
+        <div class="trackrow"><span id="sixWk"></span></div>
+      </div>
+    </div>
+
+    <div class="card prog">
+      <div class="pgrid">
+        <div class="pc orange">
+          <div class="row"><span class="label">Cut streak</span><svg class="flame" id="flame" viewBox="0 0 24 24" aria-hidden="true"><path class="outer" d="M12 1.5c.6 3.6 5.8 6.2 5.8 12a5.8 5.8 0 0 1-11.6 0c0-3.2 1.8-4.6 2.3-7.4 1.2 1 2 2.4 2.1 4.2 1.3-2.4 1.6-5.4 1.4-8.8z"/><path class="inner" d="M12 12.2c.4 1.6 2.7 2.6 2.7 5a2.7 2.7 0 0 1-5.4 0c0-1.5.9-2.2 1.2-3.4.6.5 1 1.2 1 2 .5-1.1.6-2.3.5-3.6z"/></svg></div>
+          <span class="num" id="stStreak">0</span>
+          <small id="stStreakSub">days in a row</small>
+        </div>
+        <div class="pc blue">
+          <div class="row"><span class="label">Testosterone</span><svg class="tee-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 7.5h8v2.4h-2.8V17h-2.4V9.9H8z"/></svg></div>
+          <span class="num" id="stTee">0</span>
+          <small id="stTeeSub">days since last break</small>
+        </div>
+      </div>
+      <div class="plvl">
+        <div class="row"><div class="lvlrow"><span class="lvlbadge" id="lvlNum">LV 1</span><span class="lvlname" id="lvlName">Rookie</span></div><small id="xpText">0 XP</small></div>
+        <div class="bar xp" aria-hidden="true"><i id="xpFill" style="width:0%"></i></div>
+      </div>
+      <div class="pboss">
+        <div class="row"><span class="label" id="bossLabel">Ten-day boss</span><svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5z"/></svg></div>
+        <div class="row"><b class="bossline" id="bossLine">Boss HP 10 / 10</b></div>
+        <div class="hp" id="hp" aria-hidden="true"></div>
+        <small id="bossSub"></small>
+      </div>
     </div>
 
     <div class="card" id="weekCard" hidden>
@@ -600,31 +692,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <p class="note" id="wkLine"></p>
     </div>
 
-    <div class="card">
-      <div class="row"><span class="label" id="bossLabel">Ten-day boss</span>
-        <svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5z"/></svg>
-      </div>
-      <div class="bossline" id="bossLine">Boss HP 10 / 10</div>
-      <div class="hp" id="hp" aria-hidden="true"></div>
-      <small id="bossSub"></small>
-    </div>
-
-    <div class="card">
-      <div class="row"><span class="label" id="kgTitle">Countdown to 85 kg</span><span class="label" id="kgSource">Estimate</span></div>
-      <div class="kgbig"><span class="num" id="kgNow">–</span><span>kg this morning</span></div>
-      <small id="kgLeft"></small>
-      <div class="targets">
-        <div><span>Tomorrow morning</span><b id="wake">–</b><i id="wakeD"></i></div>
-        <div><span id="wkTgtLbl">End of this week</span><b id="wkTgt">–</b><i id="wkTgtD"></i></div>
-      </div>
-      <div class="bar kg" aria-hidden="true"><i id="kgFill" style="width:0%"></i></div>
-      <div class="ends"><span id="kgStartLbl"></span><span id="kgGoalLbl"></span></div>
-      <div class="tiles3">
-        <div><b id="perDay">0.00</b><span>kg a day</span></div>
-        <div><b id="perWeek">0.0</b><span>kg a week</span></div>
-        <div><b id="eta">–</b><span>goal at this pace</span></div>
-      </div>
-    </div>
+    <button class="cta" type="button" id="ctaLog" hidden>Log today</button>
   </section>
 
   <!-- LOG -->
@@ -663,15 +731,15 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <div style="text-align:center;min-width:0;flex:1"><h2 id="selTitle">Today</h2><small id="selSub"></small></div>
         <button class="navbtn" id="dNext" aria-label="Next day">›</button>
       </div>
-      <div class="field"><span class="label">Day</span>
-        <div class="seg" id="segMark">
+      <div class="lsec"><h4 class="lsh">Day</h4>
+        <div class="seg seg3" id="segMark">
           <button type="button" data-v="done" aria-pressed="false">Completed</button>
           <button type="button" data-v="cheat" aria-pressed="false">Cheat day</button>
           <button type="button" data-v="broken" aria-pressed="false">Streak broken</button>
         </div>
         <small id="autoNote" hidden>Completed by Autopilot. If it was a cheat day, tap Cheat day.</small>
       </div>
-      <div class="field"><span class="label">Gym · +30 XP each, +50 for a double</span>
+      <div class="lsec"><h4 class="lsh">Training <small>+30 XP a session, +50 for a double</small></h4>
         <button type="button" class="gymbtn" id="gymBtn" aria-pressed="false"><span class="gpips"><i></i><i></i></span><span><b id="gymTxt">No session</b><small id="gymSub">Tap once for 1 session, twice for a double</small></span></button>
         <small id="watchNote" hidden></small>
         <div class="lifts" id="lifts">
@@ -681,6 +749,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
           <input id="liftCustom" type="text" maxlength="40" placeholder="Exercise name, e.g. Cable fly" hidden aria-label="Exercise name">
         </div>
       </div>
+      <div class="lsec"><h4 class="lsh">Food and water</h4>
       <div class="field"><span class="label" id="protLabel">Protein</span>
         <div class="seg" style="align-items:center" id="segProt">
           <button type="button" data-v="protein" aria-pressed="false">Protein taken</button>
@@ -691,7 +760,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="meals" id="meals">
         <div class="row"><span class="label">Meals</span><span class="label" id="mealTotal"></span></div>
         <ul class="meallist" id="mealList"></ul>
-        <div class="btns"><label class="btn primary" for="mealInput" id="mealSnap" role="button" tabindex="0" style="display:inline-flex;align-items:center">Snap a meal</label><button class="btn" type="button" id="mealScan">Scan barcode</button><button class="btn" type="button" id="mealType">Type it</button></div>
+        <div class="btns mealbtns"><label class="btn primary" for="mealInput" id="mealSnap" role="button" tabindex="0" style="display:inline-flex;align-items:center">Snap a meal</label><button class="btn" type="button" id="mealScan">Scan barcode</button><button class="btn" type="button" id="mealType">Type it</button></div>
         <input id="mealInput" type="file" accept="image/*" hidden>
         <div class="mealbox" id="mealBox" hidden>
           <div class="mealprev" id="mealPrev"><img id="mealImg" alt="Your meal"><div class="mealstat" id="mealStatus"></div></div>
@@ -706,7 +775,10 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         </div>
         <datalist id="foodList"></datalist>
       </div>
+      </div>
+      <div class="lsec"><h4 class="lsh">Energy</h4>
       <div class="energy" id="energy"></div>
+      <details class="lnum" id="numBox"><summary>Weigh-in, waist, calories and top sets by hand</summary>
       <div class="fields">
         <div class="field"><label class="label" for="fGym">Gym kcal</label><input id="fGym" type="number" min="0" max="4000" step="10" inputmode="numeric"></div>
         <div class="field"><label class="label" for="fFood">Food kcal</label><input id="fFood" type="number" min="0" max="8000" step="10" inputmode="numeric"></div>
@@ -716,6 +788,8 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <div class="field"><label class="label" for="fChest">Chest press kg</label><input id="fChest" type="number" min="0" max="400" step="0.5" inputmode="decimal" placeholder="Top set"></div>
       </div>
       <p class="note" id="energyNote"></p>
+      </details>
+      </div>
     </div>
   </section>
 
@@ -756,11 +830,31 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <p class="note" id="bfEmpty">Body fat appears here once your smart scale writes it to Apple Health: add <b>Body Fat Percentage</b> to the Shortcut (Settings → Apple Watch), or import your Health history.</p>
     </div>
     <div class="card">
-      <div class="row"><span class="label">Personal bests</span><span class="label" id="trophyCount">0 trophies</span></div>
-      <div class="pbs">
-        <div class="pb"><span class="label">Curl</span><span class="num" id="pbCurl">–</span><small id="pbCurlD">Log a top set</small></div>
-        <div class="pb"><span class="label">Chest press</span><span class="num" id="pbChest">–</span><small id="pbChestD">Log a top set</small></div>
-        <div class="pb"><span class="label">Bosses</span><span class="num" id="pbBoss">0</span><small>10-day streaks</small></div>
+      <div class="row"><span class="label">Milestones</span><span class="label" id="msCount"></span></div>
+      <ul class="mslist" id="msList"></ul>
+      <small>Every 5 kg off your start weight, and the goal itself. Tap Share to send your card.</small>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Strength</span><span class="label" id="strCount"></span></div>
+      <div class="tablewrap"><table><thead><tr><th>Exercise</th><th>Best set</th><th>Est. 1RM</th><th>Last</th></tr></thead><tbody id="strRows"></tbody></table></div>
+      <small id="strNote">Log sets in Log → Workout. Est. 1RM is the weight you could lift once (Epley formula), so different rep ranges compare fairly.</small>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Weekly report</span><span class="label">Tue to Mon</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Week</th><th>Days</th><th>Cheats</th><th>Gym</th><th>Waist</th><th>Weight</th><th>XP</th></tr></thead>
+          <tbody id="weeks"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Monthly report</span><span class="label">Calendar months</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Month</th><th>Days</th><th>Gym</th><th>Weight</th><th>Recov.</th><th>Sleep</th></tr></thead>
+          <tbody id="months"></tbody>
+        </table>
       </div>
     </div>
     <div class="card">
@@ -783,36 +877,16 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
       <small>One photo per cut week. Same spot, same light, same time of day makes the comparison fair. Photos stay private.</small>
     </div>
-    <div class="card">
-      <div class="row"><span class="label">Weekly report</span><span class="label">Tue to Mon</span></div>
-      <div class="tablewrap">
-        <table>
-          <thead><tr><th>Week</th><th>Days</th><th>Cheats</th><th>Gym</th><th>Waist</th><th>Weight</th><th>XP</th></tr></thead>
-          <tbody id="weeks"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card">
-      <div class="row"><span class="label">Strength</span><span class="label" id="strCount"></span></div>
-      <div class="tablewrap"><table><thead><tr><th>Exercise</th><th>Best set</th><th>Est. 1RM</th><th>Last</th></tr></thead><tbody id="strRows"></tbody></table></div>
-      <small id="strNote">Log sets in Log → Workout. Est. 1RM is the weight you could lift once (Epley formula), so different rep ranges compare fairly.</small>
-    </div>
-    <div class="card">
-      <div class="row"><span class="label">Milestones</span><span class="label" id="msCount"></span></div>
-      <ul class="mslist" id="msList"></ul>
-      <small>Every 5 kg off your start weight, and the goal itself. Tap Share to send your card.</small>
-    </div>
-    <div class="card">
-      <div class="row"><span class="label">Monthly report</span><span class="label">Calendar months</span></div>
-      <div class="tablewrap">
-        <table>
-          <thead><tr><th>Month</th><th>Days</th><th>Gym</th><th>Weight</th><th>Recov.</th><th>Sleep</th></tr></thead>
-          <tbody id="months"></tbody>
-        </table>
-      </div>
-    </div>
-  <div class="card"><div class="row"><span class="label" id="badgeTitle">Badges</span><span class="label" id="badgeCount">0 / 12</span></div>
+    <div class="card badges"><div class="row"><span class="label" id="badgeTitle">Badges</span><span class="label" id="badgeCount">0 / 12</span></div>
     <div class="bgrid" id="bgrid"></div></div>
+    <div class="card" hidden aria-hidden="true">
+      <div class="row"><span class="label">Personal bests</span><span class="label" id="trophyCount">0 trophies</span></div>
+      <div class="pbs">
+        <div class="pb"><span class="label">Curl</span><span class="num" id="pbCurl">–</span><small id="pbCurlD">Log a top set</small></div>
+        <div class="pb"><span class="label">Chest press</span><span class="num" id="pbChest">–</span><small id="pbChestD">Log a top set</small></div>
+        <div class="pb"><span class="label">Bosses</span><span class="num" id="pbBoss">0</span><small>10-day streaks</small></div>
+      </div>
+    </div>
   </section>
 
   <!-- BODY -->
@@ -882,10 +956,11 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
   <!-- SETTINGS -->
   <section class="tab" id="tab-settings" aria-label="Settings" hidden>
     <div class="tabhead"><h2>Settings</h2></div>
-
-    <div class="card" id="acct">
-      <div class="row"><span class="label">Account and sync</span><span class="label" id="syncText">On this phone only</span></div>
-      <div id="acctOut">
+    <div class="profhead" id="profHead"><span class="me big" id="phInit">•</span><div><b id="phName">Cut Log</b><span id="phSub">Not signed in</span></div></div>
+    <h3 class="sgh">Account</h3>
+    <div class="sgroup">
+    <details class="srow" id="acct"><summary><span class="sic" style="background:var(--primary)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="stt">Account and sign-in<small>Face ID, password, username, sync</small></span><span class="sst" id="syncText">On this phone only</span></summary>
+      <div class="sbody">      <div id="acctOut">
         <p class="note" id="acctNoCfg">Sync isn't connected yet. Everything is saved on this phone and works offline.</p>
         <div id="acctForm" hidden>
           <div class="chips" id="acctMode" role="group" aria-label="Sign in or create an account" style="margin:0 0 12px">
@@ -930,7 +1005,7 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <small id="lMsg"></small>
       </div>
       <div id="acctIn" hidden>
-        <p class="note">Signed in as <b id="aWho"></b>. Your days, settings and photos sync to your private database.</p>
+        <p class="note" hidden>Signed in as <b id="aWho"></b>.</p>
         <div class="fields" id="profBox">
           <div class="field"><label class="label" for="prName">Your name</label><input id="prName" type="text" autocomplete="nickname" maxlength="40" placeholder="Shown on Home"></div>
           <div class="field"><label class="label" for="prUser">Username</label><div class="atwrap"><span aria-hidden="true">@</span><input id="prUser" type="text" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="20" placeholder="yourname"></div></div>
@@ -953,17 +1028,18 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <small id="pkMsg"></small>
       </div>
     </div>
-
-    <div class="card" id="safeCard">
-      <div class="row"><span class="label">Your data</span><span class="label" id="safeStatus"></span></div>
-      <ul class="checks" id="safeList"></ul>
+    </details>
+    <details class="srow" id="safeCard"><summary><span class="sic" style="background:var(--done)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="stt">Your data<small>Saved on this phone and in the cloud</small></span><span class="sst" id="safeStatus"></span></summary>
+      <div class="sbody">      <ul class="checks" id="safeList"></ul>
       <div class="btns"><button class="btn" type="button" id="safeCheck">Check my data</button></div>
       <small id="safeMsg"></small>
     </div>
-
-    <div class="card">
-      <span class="label">Your plan</span>
-      <div class="fields">
+    </details>
+    </div>
+    <h3 class="sgh">Your plan</h3>
+    <div class="sgroup">
+    <details class="srow" id="planCard"><summary><span class="sic" style="background:#d97706"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg></span><span class="stt">Plan and goals<small>Weights, burn, protein rhythm, water</small></span></summary>
+      <div class="sbody">      <div class="fields">
         <div class="field"><label class="label" for="sStart">Start date</label><input id="sStart" type="date"></div>
         <div class="field"><label class="label" for="sStartW">Start weight kg</label><input id="sStartW" type="number" step="0.1" inputmode="decimal"></div>
         <div class="field"><label class="label" for="sGoal">Goal kg</label><input id="sGoal" type="number" step="0.1" inputmode="decimal"></div>
@@ -980,10 +1056,46 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
       <div class="btns"><button class="btn primary" type="button" id="sSave">Save plan</button></div>
     </div>
-
-    <div class="card" id="watchCard">
-      <div class="row"><span class="label">Apple Watch</span><span class="label" id="watchStatus">Not connected</span></div>
-      <p class="note">Apple only lets App Store apps read Apple Health, so a free iPhone Shortcut does it: each night it reads your watch's workouts, active and resting calories, steps and any weigh-in, and sends them here. What you type yourself always wins.</p>
+    </details>
+    </div>
+    <h3 class="sgh">Automation</h3>
+    <div class="sgroup">
+    <details class="srow" id="autoCard"><summary><span class="sic" style="background:var(--primary)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg></span><span class="stt">Autopilot<small>Completes days and sends reminders by itself</small></span><span class="sst" id="autoStatus">On</span></summary>
+      <div class="sbody">      <p class="note">Cut Log runs the day for you. Your Apple Watch fills in sessions, calories, steps and weigh-ins; protein days follow the schedule; and any day you don’t mark is <b>completed automatically</b> the next day. The only thing left to tap is a cheat day.</p>
+      <div class="fields">
+        <div class="field"><label class="label" for="autoOn">Auto-complete days</label><button class="toggle" type="button" id="autoOn" aria-pressed="true"><i></i><span>On</span></button></div>
+        <div class="field"><label class="label" for="autoHour">Completes the next day at</label><select id="autoHour"></select></div>
+      </div>
+      <small id="autoMsg">Runs in your private database every 15 minutes, even with the app closed.</small>
+    </div>
+    </details>
+    <details class="srow" id="remCard"><summary><span class="sic" style="background:var(--cheat)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="stt">Reminders<small>Morning brief, recap, Sunday, water</small></span><span class="sst" id="remStatus">Off</span></summary>
+      <div class="sbody">      <p class="note">An evening nudge to tap the day in, protein days and the Sunday waist check, plus a morning recovery score once your watch has synced. Nothing is sent if there's nothing to say.</p>
+      <div id="remNeeds"><small id="remNeedsText">Sign in to sync first. Reminders are sent from your private database.</small></div>
+      <div id="remReady" hidden>
+        <div class="fields" style="grid-template-columns:1fr">
+          <div class="field"><label class="label" for="remHour">Evening recap at</label><select id="remHour"></select></div>
+          <div class="field"><label class="label" for="remMHour">Morning brief from</label><select id="remMHour"></select></div>
+        </div>
+        <div class="seg" id="segRem" style="margin-top:10px">
+          <button type="button" data-v="morning" aria-pressed="true">Morning recovery</button>
+          <button type="button" data-v="protein" aria-pressed="true">Protein days</button>
+          <button type="button" data-v="waist" aria-pressed="true">Sunday check-in</button>
+          <button type="button" data-v="log" aria-pressed="true">Evening recap</button>
+          <button type="button" data-v="weekly" aria-pressed="true">Weekly brief</button>
+          <button type="button" data-v="stalled" aria-pressed="true">Watch sync alerts</button>
+          <button type="button" data-v="water" aria-pressed="true">Water check</button>
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="remOn">Turn on reminders</button><button class="btn" type="button" id="remTest" hidden>Test on this phone</button><button class="btn danger" type="button" id="remOff" hidden>Turn off</button></div>
+        <small id="remMsg"></small>
+      </div>
+    </div>
+    </details>
+    </div>
+    <h3 class="sgh">Connections</h3>
+    <div class="sgroup">
+    <details class="srow" id="watchCard"><summary><span class="sic" style="background:var(--blue)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3"/></svg></span><span class="stt">Apple Watch<small>Shortcut link, real sleep, body fat</small></span><span class="sst" id="watchStatus">Not connected</span></summary>
+      <div class="sbody">      <p class="note">Apple only lets App Store apps read Apple Health, so a free iPhone Shortcut does it: each night it reads your watch's workouts, active and resting calories, steps and any weigh-in, and sends them here. What you type yourself always wins.</p>
       <div id="watchNeedsAcct"><small id="watchNeedsText">Sign in to sync first. The Shortcut sends data to your private database.</small></div>
       <div id="watchReady" hidden>
         <div id="wOut" class="field">
@@ -1099,10 +1211,9 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         </details>
       </div>
     </div>
-
-    <div class="card" id="impCard">
-      <div class="row"><span class="label">Apple Health history</span><span class="label" id="impStatus"></span></div>
-      <p class="note">Bring in <b>everything</b> your iPhone and Watch have ever recorded: workouts, sleep stages, heart rate, HRV, resting heart rate, VO₂ max, blood oxygen, steps and weight. It's read on this phone; only one summary row per day is saved.</p>
+    </details>
+    <details class="srow" id="impCard"><summary><span class="sic" style="background:#ec4899"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></span><span class="stt">Apple Health history<small>Import everything your iPhone has recorded</small></span><span class="sst" id="impStatus"></span></summary>
+      <div class="sbody">      <p class="note">Bring in <b>everything</b> your iPhone and Watch have ever recorded: workouts, sleep stages, heart rate, HRV, resting heart rate, VO₂ max, blood oxygen, steps and weight. It's read on this phone; only one summary row per day is saved.</p>
       <ol class="guide-ol">
         <li>Open the <b>Health</b> app → tap your photo (top right) → <b>Export All Health Data</b> → <b>Export</b>.</li>
         <li>When it's ready, choose <b>Save to Files</b>.</li>
@@ -1112,10 +1223,9 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       <div class="bar imp" id="impBar" hidden aria-hidden="true"><i id="impFill" style="width:0%"></i></div>
       <small id="impMsg"></small>
     </div>
-
-    <div class="card" id="widgetCard">
-      <div class="row"><span class="label">Lock-screen widget</span><span class="label">Free</span></div>
-      <p class="note">Your streak, recovery, weight and next shake on your Lock Screen and Home Screen, updating every 15 minutes. It uses <b>Scriptable</b>, a free app that runs small scripts as widgets.</p>
+    </details>
+    <details class="srow" id="widgetCard"><summary><span class="sic" style="background:var(--sleep)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></svg></span><span class="stt">Lock-screen widget<small>Streak, recovery and weight at a glance</small></span></summary>
+      <div class="sbody">      <p class="note">Your streak, recovery, weight and next shake on your Lock Screen and Home Screen, updating every 15 minutes. It uses <b>Scriptable</b>, a free app that runs small scripts as widgets.</p>
       <div id="widgetNeeds"><small>Sign in first: the widget reads your numbers with your personal link.</small></div>
       <div id="widgetReady" hidden>
         <ol class="guide-ol">
@@ -1128,43 +1238,12 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
         <small>The script holds your personal link. If you ever tap Make a new link, copy the script again.</small>
       </div>
     </div>
-
-    <div class="card" id="autoCard">
-      <div class="row"><span class="label">Autopilot</span><span class="label" id="autoStatus">On</span></div>
-      <p class="note">Cut Log runs the day for you. Your Apple Watch fills in sessions, calories, steps and weigh-ins; protein days follow the schedule; and any day you don’t mark is <b>completed automatically</b> the next day. The only thing left to tap is a cheat day.</p>
-      <div class="fields">
-        <div class="field"><label class="label" for="autoOn">Auto-complete days</label><button class="toggle" type="button" id="autoOn" aria-pressed="true"><i></i><span>On</span></button></div>
-        <div class="field"><label class="label" for="autoHour">Completes the next day at</label><select id="autoHour"></select></div>
-      </div>
-      <small id="autoMsg">Runs in your private database every 15 minutes, even with the app closed.</small>
+    </details>
     </div>
-
-    <div class="card" id="remCard">
-      <div class="row"><span class="label">Reminders</span><span class="label" id="remStatus">Off</span></div>
-      <p class="note">An evening nudge to tap the day in, protein days and the Sunday waist check, plus a morning recovery score once your watch has synced. Nothing is sent if there's nothing to say.</p>
-      <div id="remNeeds"><small id="remNeedsText">Sign in to sync first. Reminders are sent from your private database.</small></div>
-      <div id="remReady" hidden>
-        <div class="fields" style="grid-template-columns:1fr">
-          <div class="field"><label class="label" for="remHour">Evening recap at</label><select id="remHour"></select></div>
-          <div class="field"><label class="label" for="remMHour">Morning brief from</label><select id="remMHour"></select></div>
-        </div>
-        <div class="seg" id="segRem" style="margin-top:10px">
-          <button type="button" data-v="morning" aria-pressed="true">Morning recovery</button>
-          <button type="button" data-v="protein" aria-pressed="true">Protein days</button>
-          <button type="button" data-v="waist" aria-pressed="true">Sunday check-in</button>
-          <button type="button" data-v="log" aria-pressed="true">Evening recap</button>
-          <button type="button" data-v="weekly" aria-pressed="true">Weekly brief</button>
-          <button type="button" data-v="stalled" aria-pressed="true">Watch sync alerts</button>
-          <button type="button" data-v="water" aria-pressed="true">Water check</button>
-        </div>
-        <div class="btns" style="margin-top:10px"><button class="btn primary" type="button" id="remOn">Turn on reminders</button><button class="btn" type="button" id="remTest" hidden>Test on this phone</button><button class="btn danger" type="button" id="remOff" hidden>Turn off</button></div>
-        <small id="remMsg"></small>
-      </div>
-    </div>
-
-    <div class="card">
-      <span class="label">Backup</span>
-      <p class="note">Download everything as one file, or load a file to restore it. Loading a backup replaces what's on this phone.</p>
+    <h3 class="sgh">Data</h3>
+    <div class="sgroup">
+    <details class="srow" id="backupCard"><summary><span class="sic" style="background:#64748b"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 18v2h16v-2"/></svg></span><span class="stt">Backup<small>Download or restore a file</small></span></summary>
+      <div class="sbody">      <p class="note">Download everything as one file, or load a file to restore it. Loading a backup replaces what's on this phone.</p>
       <div class="btns">
         <button class="btn" type="button" id="bExport">Download backup</button>
         <label class="btn" for="bImport" style="display:inline-flex;align-items:center">Load backup</label>
@@ -1172,11 +1251,14 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
       </div>
       <div id="bConfirm" hidden class="btns"><small id="bConfirmText"></small><button class="btn primary" type="button" id="bYes">Replace my data</button><button class="btn" type="button" id="bNo">Cancel</button></div>
     </div>
-
-    <div class="card">
-      <span class="label">Install</span>
-      <p class="note">On iPhone: open this page in Safari, tap Share, then Add to Home Screen. It then opens full screen with its own icon and works with no signal.</p>
+    </details>
+    <details class="srow" id="installCard"><summary><span class="sic" style="background:#64748b"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="3"/><path d="M11 18h2"/></svg></span><span class="stt">Install on iPhone<small>Add Cut Log to your Home Screen</small></span></summary>
+      <div class="sbody">      <p class="note">On iPhone: open this page in Safari, tap Share, then Add to Home Screen. It then opens full screen with its own icon and works with no signal.</p>
     </div>
+    </details>
+    </div>
+    <p class="appfoot">Cut Log · v<span id="appVer"></span> · Built by Mamour Media</p>
+
   </section>
 </main>
 
@@ -1218,11 +1300,11 @@ td .wk{font-family:var(--display);font-weight:800;font-size:1.05rem;text-transfo
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=22"></script>
-<script src="store.js?v=22"></script>
-<script src="food/foods.js?v=22"></script>
-<script src="health.js?v=22"></script>
-<script src="body.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="config.js?v=23"></script>
+<script src="store.js?v=23"></script>
+<script src="food/foods.js?v=23"></script>
+<script src="health.js?v=23"></script>
+<script src="body.js?v=23"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
