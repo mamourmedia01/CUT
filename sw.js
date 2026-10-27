@@ -1,5 +1,5 @@
 // Cut Log service worker: app shell cached for offline use, fonts cached at runtime.
-const VERSION = 'cutlog-v3';
+const VERSION = 'cutlog-v4';
 const SHELL = [
   './', './index.html', './app.js', './store.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
